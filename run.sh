@@ -24,7 +24,7 @@ fi
 
 # 5. Copia TODOS os recursos (áudio, txt, etc.) da 'src' para a 'bin'
 echo "Copiando todos os recursos (áudio, txt, etc.) para a pasta 'bin'..."
-rsync -av --prune-empty-dirs --exclude="*.java" src/ bin/
+cp -r src/com/tetris/audio bin/com/tetris/
 # Copia também o highscore.txt da raiz
 cp highscore.txt bin/
 
