@@ -17,35 +17,14 @@ public class AudioManager {
     private Clip musicClip;
 
     public AudioManager(String path) {
-        System.out.println("AudioManager: Tentando carregar áudio. Caminho original recebido: " + path);
-        
+        System.out.println("AudioManager: A tentar carregar o áudio de: " + path);
         try {
-            // --- INÍCIO DA CORREÇÃO ---
-            // O código que chama este construtor está passando um caminho "sujo" (ex: "src/com/...")
-            // Vamos limpar o caminho para que ele seja relativo à raiz do classpath (a pasta 'bin').
-
-            // 1. Remove o prefixo "src/" se ele existir
-            if (path.startsWith("src/")) {
-                path = path.substring(4); // Remove os primeiros 4 caracteres ("src/")
-                System.out.println("AudioManager: Path corrigido (removido 'src/'): " + path);
-            }
-
-            // 2. Garante que o caminho começa com "/" para ser absoluto do classpath
-            if (!path.startsWith("/")) {
-                path = "/" + path;
-                System.out.println("AudioManager: Path corrigido (adicionado '/'): " + path);
-            }
-            // Agora, o 'path' será algo como "/com/tetris/audio/background-music.wav"
-            // --- FIM DA CORREÇÃO ---
-
-
             URL url = AudioManager.class.getResource(path);
-            
             if (url == null) {
                 System.err.println("************************************************************");
-                System.err.println("ERRO CRÍTICO: Áudio não encontrado COM O CAMINHO CORRIGIDO!");
-                System.err.println("Caminho procurado: " + path);
-                System.err.println("Verifique se o arquivo existe em: bin" + path);
+                System.err.println("ERRO CRÍTICO: Áudio não encontrado!");
+                System.err.println("Verifique se o ficheiro 'background-music.wav' existe em 'bin/resources/'.");
+                System.err.println("Lembre-se de copiar a pasta 'src/resources' para dentro da pasta 'bin'.");
                 System.err.println("************************************************************");
                 return;
             }
@@ -64,7 +43,7 @@ public class AudioManager {
         } catch (UnsupportedAudioFileException e) {
             System.err.println("************************************************************");
             System.err.println("ERRO CRÍTICO: Formato de áudio não suportado!");
-            System.err.println("O ficheiro " + path + " pode estar corrompido ou num formato inválido (ex: MP3).");
+            System.err.println("O ficheiro .wav pode estar corrompido ou num formato inválido.");
             System.err.println("Por favor, tente converter o ficheiro para WAV (PCM Signed, 16 bit) novamente.");
             System.err.println("************************************************************");
             e.printStackTrace();
