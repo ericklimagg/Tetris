@@ -17,19 +17,25 @@ public class AudioManager {
     private Clip musicClip;
 
     public AudioManager(String path) {
-        System.out.println("AudioManager: A tentar carregar o áudio de: " + path);
+        // CORREÇÃO: Usa um método mais robusto para encontrar o recurso.
+        // Garante que o caminho seja tratado como absoluto a partir da raiz do classpath.
+        String correctedPath = path.startsWith("/") ? path.substring(1) : path;
+
+        System.out.println("AudioManager: Tentando carregar áudio de: " + correctedPath);
         try {
-            URL url = AudioManager.class.getResource(path);
+            URL url = Thread.currentThread().getContextClassLoader().getResource(correctedPath);
+
             if (url == null) {
                 System.err.println("************************************************************");
-                System.err.println("ERRO CRÍTICO: Áudio não encontrado!");
-                System.err.println("Verifique se o ficheiro 'background-music.wav' existe em 'bin/resources/'.");
-                System.err.println("Lembre-se de copiar a pasta 'src/resources' para dentro da pasta 'bin'.");
+                System.err.println("ERRO CRÍTICO: Recurso de áudio não encontrado!");
+                System.err.println("Caminho procurado: " + correctedPath);
+                System.err.println("Verifique se o arquivo de áudio existe no diretório 'bin' com a mesma estrutura de pastas que 'src'.");
+                System.err.println("Exemplo: 'src/com/tetris/audio/music.wav' deve estar em 'bin/com/tetris/audio/music.wav'.");
                 System.err.println("************************************************************");
                 return;
             }
             
-            System.out.println("AudioManager: Ficheiro de áudio encontrado em: " + url.getPath());
+            System.out.println("AudioManager: Arquivo de áudio encontrado em: " + url);
 
             AudioInputStream audioStream = AudioSystem.getAudioInputStream(url);
             System.out.println("AudioManager: AudioInputStream criado com sucesso.");
