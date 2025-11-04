@@ -3,6 +3,7 @@ package com.tetris.controller;
 import com.tetris.model.Board;
 import com.tetris.model.Theme;
 import com.tetris.view.GameFrame;
+import com.tetris.audio.AudioManager; // <<<--- 1. IMPORT ADICIONADO
 import javax.swing.Timer;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
@@ -27,6 +28,7 @@ public class GameController extends KeyAdapter implements ActionListener {
     private final Board board1; 
     private final Board board2; 
     private final Timer timer;
+    private final AudioManager backgroundMusic; // <<<--- 2. CAMPO ADICIONADO
 
     private int currentThemeIndex = 0;
     private GameMode currentGameMode = GameMode.ONE_PLAYER;
@@ -44,6 +46,12 @@ public class GameController extends KeyAdapter implements ActionListener {
         
         this.gameFrame.getGamePanel().addKeyListener(this);
         this.gameFrame.getGamePanel().setFocusable(true);
+
+        // <<<--- 3. ÁUDIO INICIALIZADO (USE O .wav, NÃO O .mp3)
+        // O caminho "sujo" (com src/) é intencional, pois o AudioManager.java
+        // que eu fiz está programado para limpar esse path.
+        System.out.println("GameController: Tentando inicializar o AudioManager...");
+        this.backgroundMusic = new AudioManager("src/com/tetris/audio/background-music.wav");
     }
 
     public void start() {
@@ -98,6 +106,11 @@ public class GameController extends KeyAdapter implements ActionListener {
         if (p1_over && p2_over) {
             if (timer.isRunning()) {
                 timer.stop();
+                
+                // <<<--- 5. PARAR A MÚSICA NO GAME OVER
+                if (backgroundMusic != null) {
+                    backgroundMusic.stopMusic();
+                }
             }
         }
         
@@ -173,6 +186,11 @@ public class GameController extends KeyAdapter implements ActionListener {
                 board2.start();
             }
 
+            // <<<--- 4. TOCAR A MÚSICA AO INICIAR
+            if (backgroundMusic != null) {
+                backgroundMusic.playMusic();
+            }
+
             if (!timer.isRunning()) {
                 timer.start();
             }
@@ -217,6 +235,15 @@ public class GameController extends KeyAdapter implements ActionListener {
             if (isGameActive && (!board1.isGameOver() || (currentGameMode == GameMode.TWO_PLAYER && !board2.isGameOver()))) {
                  board1.togglePause();
                  board2.togglePause(); 
+
+                 // <<<--- 6. PAUSAR/RETOMAR A MÚSICA
+                 if (backgroundMusic != null) {
+                     if (board1.isPaused()) {
+                         backgroundMusic.stopMusic();
+                     } else {
+                         backgroundMusic.playMusic();
+                     }
+                 }
                 
                  if (!board1.isPaused()) {
                     long currentTime = System.currentTimeMillis();
