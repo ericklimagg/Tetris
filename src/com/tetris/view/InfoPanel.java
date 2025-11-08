@@ -24,6 +24,9 @@ public class InfoPanel extends JPanel {
 
     private Board board;
     private Theme currentTheme;
+    
+    // --- NOVO CAMPO ---
+    private boolean showVictories = false; // Por padrão, não mostra
 
     public InfoPanel() {
         this.currentTheme = Theme.AVAILABLE_THEMES[0];
@@ -38,6 +41,15 @@ public class InfoPanel extends JPanel {
     public void updateTheme(Theme theme) {
         this.currentTheme = theme;
         setBackground(theme.uiBackground());
+    }
+    
+    // --- NOVO MÉTODO ---
+    /**
+     * Define se o painel de vitórias deve ser exibido.
+     * Chamado pelo GamePanel ao trocar de modo.
+     */
+    public void setShowVictories(boolean show) {
+        this.showVictories = show;
     }
 
     @Override
@@ -71,10 +83,13 @@ public class InfoPanel extends JPanel {
         currentY = drawInfoBlock(g2d, "HIGH SCORE", String.format("%06d", Board.getHighScore()), padding, currentY, blockWidth, blockHeight, textColor);
         currentY += spacing;
         
-        // --- NOVO: Adiciona o card de Vitórias ---
-        currentY = drawInfoBlock(g2d, "VITÓRIAS", String.format("%03d", board.getWins()), padding, currentY, blockWidth, blockHeight, textColor);
-        currentY += spacing;
-        // --- FIM NOVO ---
+        // --- LÓGICA ATUALIZADA ---
+        // Só desenha o card de Vitórias se 'showVictories' for verdadeiro
+        if (this.showVictories) {
+            currentY = drawInfoBlock(g2d, "VITÓRIAS", String.format("%03d", board.getWins()), padding, currentY, blockWidth, blockHeight, textColor);
+            currentY += spacing;
+        }
+        // --- FIM DA ATUALIZAÇÃO ---
         
         currentY = drawInfoBlock(g2d, "PONTUAÇÃO", String.format("%06d", board.getScore()), padding, currentY, blockWidth, blockHeight, textColor);
         currentY += spacing;
@@ -96,10 +111,10 @@ public class InfoPanel extends JPanel {
         // Bloco de Dica de Controle na parte inferior
         drawControlHintBlock(g2d, "PAUSA (P)", padding, getHeight() - 85, blockWidth, 60, textColor);
     }
-
-    /**
-     * Helper para desenhar um bloco de informação estilizado.
-     */
+    
+    // ... (Restante dos métodos drawInfoBlock, drawNextPiecePanel, etc. continuam iguais) ...
+    // ... (drawSquare, etc.) ...
+    
     private int drawInfoBlock(Graphics2D g, String title, String value, int x, int y, int width, int height, Color textColor) {
         Color blockColor = currentTheme.uiBackground().darker();
         Color borderColor = currentTheme.uiBackground().brighter();
@@ -120,9 +135,6 @@ public class InfoPanel extends JPanel {
         return y + height;
     }
 
-    /**
-     * Helper para desenhar o painel da próxima peça.
-     */
     private int drawNextPiecePanel(Graphics2D g, String title, int x, int y, int width, int height, Color textColor) {
         Color blockColor = currentTheme.uiBackground().darker();
         Color borderColor = currentTheme.uiBackground().brighter();
@@ -149,9 +161,6 @@ public class InfoPanel extends JPanel {
         return y + height;
     }
 
-    /**
-     * Helper para desenhar o painel de dica de controle.
-     */
     private void drawControlHintBlock(Graphics2D g, String text, int x, int y, int width, int height, Color textColor) {
         Color blockColor = currentTheme.uiBackground().darker();
         Color borderColor = currentTheme.uiBackground().brighter();

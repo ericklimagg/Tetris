@@ -56,6 +56,8 @@ public class GamePanel extends JPanel {
         garbageBar2.setVisible(false);
         boardPanel2.setVisible(false);
         infoPanel2.setVisible(false);
+        
+        // (infoPanel1.setShowVictories(false) é o padrão, não precisa chamar aqui)
     }
     
     /**
@@ -64,6 +66,12 @@ public class GamePanel extends JPanel {
      */
     public void setMode(GameController.GameMode mode) {
         boolean isTwoPlayer = (mode == GameController.GameMode.TWO_PLAYER);
+        
+        // --- ATUALIZAÇÃO ---
+        // Define a visibilidade do painel de vitórias para ambos os InfoPanels
+        infoPanel1.setShowVictories(isTwoPlayer);
+        infoPanel2.setShowVictories(isTwoPlayer);
+        // --- FIM DA ATUALIZAÇÃO ---
         
         // P1's garbage bar é VISÍVEL APENAS no modo 2P
         garbageBar1.setVisible(isTwoPlayer); 
@@ -93,7 +101,7 @@ public class GamePanel extends JPanel {
 
 
     // --- Getters para o Controller ---
-
+    // ... (Getters continuam os mesmos) ...
     public BoardPanel getBoardPanel1() {
         return boardPanel1;
     }

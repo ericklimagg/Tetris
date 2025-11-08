@@ -4,7 +4,13 @@ import com.tetris.controller.GameController;
 import com.tetris.controller.GameController.GameScreen; 
 import com.tetris.model.Board;
 import com.tetris.model.Theme; 
+// --- NOVOS IMPORTS ROBUSTOS ---
+import com.tetris.database.SoloScoreEntry;
+import com.tetris.database.PlayerProfile;
+// --- FIM DOS IMPORTS ---
 
+import java.util.List; 
+import java.text.SimpleDateFormat; 
 import javax.swing.JPanel;
 import java.awt.Color;
 import java.awt.Font;
@@ -15,7 +21,7 @@ import java.awt.RenderingHints;
 
 /**
  * Um painel transparente que desenha os 'overlays' (telas por cima do jogo).
- * ATUALIZADO: Adiciona explicação de Nível nas Regras.
+ * ATUALIZADO: Implementa a tela de Login/Cadastro (PROFILE_SELECTION).
  */
 public class OverlayPanel extends JPanel {
 
@@ -24,32 +30,43 @@ public class OverlayPanel extends JPanel {
     private GameController.GameMode currentGameMode;
     private Theme currentTheme; 
     
-    // --- Variáveis de Estado do Menu ---
     private GameScreen currentScreen;
     private int mainMenuSelection;
     private int modeSelectSelection;
     private int gameOverSelection; 
     private int pauseMenuSelection; 
 
+    // --- Variáveis do Banco de Dados (ROBUSTAS) ---
+    private List<SoloScoreEntry> topSoloScores;
+    private SimpleDateFormat dateFormat = new SimpleDateFormat("dd/MM/yyyy");
+    private String playerNameInput = "";
+    private PlayerProfile currentUser = null;
+
+
     public OverlayPanel() {
-        setOpaque(false); // Este painel é transparente por padrão
+        setOpaque(false); 
     }
     
     public void updateTheme(Theme theme) {
         this.currentTheme = theme;
     }
 
+    // --- ASSINATURA DO MÉTODO ATUALIZADA (ROBUSTA) ---
     public void updateMenuState(Board board1, Board board2, GameController.GameMode mode, 
-                                GameScreen screen, int mainSelection, int modeSelection,
-                                int gameOverSelection, int pauseSelection) { 
+                                GameScreen screen, int mainSelection, int modeSelectSelection,
+                                int gameOverSelection, int pauseSelection, List<SoloScoreEntry> topSoloScores,
+                                String playerNameInput, PlayerProfile currentUser) { 
         this.board1 = board1;
         this.board2 = board2;
         this.currentGameMode = mode;
         this.currentScreen = screen;
         this.mainMenuSelection = mainSelection;
-        this.modeSelectSelection = modeSelection;
+        this.modeSelectSelection = modeSelectSelection;
         this.gameOverSelection = gameOverSelection;
         this.pauseMenuSelection = pauseSelection; 
+        this.topSoloScores = topSoloScores;     
+        this.playerNameInput = playerNameInput; 
+        this.currentUser = currentUser;       
     }
     
     public void updateBoards(Board board1, Board board2) {
@@ -76,11 +93,11 @@ public class OverlayPanel extends JPanel {
                             currentScreen == GameScreen.PAUSED_RULES);
 
         if (isGameActive) {
-            // --- Jogo está ATIVO ---
             if (isGameOver) {
                 g.setColor(new Color(0, 0, 0, 200)); 
                 g.fillRect(0, 0, getWidth(), getHeight());
                 drawGameOver(g2d); 
+            
             } else if (isPaused) {
                 g.setColor(new Color(0, 0, 0, 180)); 
                 g.fillRect(0, 0, getWidth(), getHeight());
@@ -93,19 +110,21 @@ public class OverlayPanel extends JPanel {
                     drawPausedRulesScreen(g2d);
                 }
             }
-            // Se o jogo estiver rodando, não desenha nada por cima
-            
         } else {
-            // --- Jogo NÃO está ativo (Estamos no Menu Principal) ---
-            g.setColor(currentTheme.uiBackground()); // Cor sólida do tema
+            g.setColor(currentTheme.uiBackground()); 
             g.fillRect(0, 0, getWidth(), getHeight());
             
             g.setColor(new Color(0, 0, 0, 200));
             g.fillRect(0, 0, getWidth(), getHeight());
 
+            if (currentScreen == null) return; 
+
             switch (currentScreen) {
                 case MAIN_MENU:
                     drawStartScreen(g2d);
+                    break;
+                case PROFILE_SELECTION: // <-- NOVO CASE
+                    drawProfileSelectionScreen(g2d);
                     break;
                 case MODE_SELECT:
                     drawModeSelectScreen(g2d);
@@ -119,11 +138,14 @@ public class OverlayPanel extends JPanel {
                 case CONTROLS_SCREEN:
                     drawControlsScreen(g2d);
                     break;
+                default:
+                    drawStartScreen(g2d);
+                    break;
             }
         }
     }
 
-    // --- ============ NOVO DESIGN DE MENU ============ ---
+    // --- ============ MÉTODOS DE DESENHO DE MENU ============ ---
     
     private void drawMenuCard(Graphics2D g, int x, int y, int width, int height) {
         g.setColor(new Color(20, 20, 30, 220)); 
@@ -160,7 +182,7 @@ public class OverlayPanel extends JPanel {
         g.setFont(new Font("Consolas", Font.PLAIN, 28));
         int y_menu = y + 60;
         
-        String[] options = {"Jogar", "Ranking", "Regras", "Controles", "Sair"};
+        String[] options = {"Jogar", "Ranking 1P", "Regras", "Controles", "Sair"};
         boolean cursorVisible = (System.currentTimeMillis() / 400) % 2 == 0;
         String selector = cursorVisible ? ">" : " ";
         
@@ -175,7 +197,41 @@ public class OverlayPanel extends JPanel {
             y_menu += 45;
         }
         
+        if (currentUser != null) {
+            g.setFont(new Font("Consolas", Font.PLAIN, 16));
+            g.setColor(Color.CYAN);
+            drawCenteredString(g, "Logado como: " + currentUser.getUsername(), getWidth() / 2, getHeight() - 90);
+        }
+        
         drawFooterHint(g, "(Use ↑↓ para selecionar, ENTER para confirmar)");
+    }
+    
+    private void drawProfileSelectionScreen(Graphics2D g) {
+        int cardWidth = 500; 
+        int cardHeight = 300;
+        int x = getWidth() / 2 - cardWidth / 2;
+        int y = getHeight() / 2 - cardHeight / 2;
+        
+        drawMenuCard(g, x, y, cardWidth, cardHeight);
+        
+        g.setColor(Color.CYAN);
+        g.setFont(new Font("Consolas", Font.BOLD, 36));
+        drawCenteredString(g, "SELEÇÃO DE PERFIL", getWidth() / 2, y + 70); 
+
+        g.setColor(Color.WHITE);
+        g.setFont(new Font("Consolas", Font.PLAIN, 18));
+        drawCenteredString(g, "Digite seu nome de usuário:", getWidth() / 2, y + 120); 
+        drawCenteredString(g, "(O perfil será criado se não existir)", getWidth() / 2, y + 145); 
+        
+        g.setFont(new Font("Consolas", Font.BOLD, 28));
+        g.setColor(Color.WHITE);
+        
+        boolean cursorVisible = (System.currentTimeMillis() / 400) % 2 == 0;
+        String nameStr = playerNameInput + (cursorVisible ? "_" : "");
+        
+        drawCenteredString(g, nameStr, getWidth() / 2, y + 210);
+        
+        drawFooterHint(g, "(A-Z, 0-9) | ENTER para Confirmar | ESC para Voltar");
     }
 
     private void drawModeSelectScreen(Graphics2D g) {
@@ -206,12 +262,18 @@ public class OverlayPanel extends JPanel {
             y_menu += 45;
         }
         
+        if (currentUser != null) {
+            g.setFont(new Font("Consolas", Font.PLAIN, 16));
+            g.setColor(Color.CYAN);
+            drawCenteredString(g, "Jogando como: " + currentUser.getUsername(), getWidth() / 2, getHeight() - 90);
+        }
+        
         drawFooterHint(g, "(Pressione ESC para Voltar)");
     }
 
     private void drawRankingScreen(Graphics2D g) {
-        int cardWidth = 400;
-        int cardHeight = 450;
+        int cardWidth = 500; 
+        int cardHeight = 550; 
         int x = getWidth() / 2 - cardWidth / 2;
         int y = 100;
         
@@ -219,34 +281,64 @@ public class OverlayPanel extends JPanel {
         
         g.setColor(Color.CYAN);
         g.setFont(new Font("Consolas", Font.BOLD, 32));
-        drawCenteredString(g, "RANKING", getWidth() / 2, y + 50);
+        drawCenteredString(g, "RANKING 1P (SCORES)", getWidth() / 2, y + 50);
 
-        g.setColor(Color.WHITE);
-        g.setFont(new Font("Consolas", Font.PLAIN, 20));
-        int y_list = y + 120;
-        
-        drawCenteredString(g, "EM BREVE...", getWidth() / 2, y_list);
-        
+        g.setColor(Color.YELLOW);
         g.setFont(new Font("Consolas", Font.BOLD, 16));
+        int y_list = y + 100;
+        int x_padding = 40;
+        g.drawString("POS", x + x_padding, y_list);
+        g.drawString("NOME", x + x_padding + 50, y_list);
+        g.drawString("PONTUAÇÃO", x + x_padding + 210, y_list);
+        g.drawString("DATA", x + x_padding + 360, y_list);
+        
         g.setColor(Color.GRAY);
-        y_list += 60;
-        drawCenteredString(g, "Aqui você poderá ver as", getWidth() / 2, y_list);
-        y_list += 25;
-        drawCenteredString(g, "10 maiores pontuações", getWidth() / 2, y_list);
-        y_list += 25;
-        drawCenteredString(g, "salvas em arquivo ou", getWidth() / 2, y_list);
-        y_list += 25;
-        drawCenteredString(g, "no banco de dados.", getWidth() / 2, y_list);
+        g.drawLine(x + 20, y_list + 10, x + cardWidth - 20, y_list + 10);
+        
+        y_list += 35; 
+        g.setColor(Color.WHITE);
+        g.setFont(new Font("Consolas", Font.PLAIN, 16));
+
+        if (topSoloScores == null || topSoloScores.isEmpty()) {
+            drawCenteredString(g, "Nenhuma pontuação registrada.", getWidth() / 2, y + 250);
+        
+        } else {
+            int pos = 1;
+            for (SoloScoreEntry entry : topSoloScores) {
+                String posStr = String.format("%2d.", pos);
+                String scoreStr = String.format("%,d", entry.score()); 
+                String dateStr = dateFormat.format(entry.date());
+
+                if (pos == 1) g.setColor(Color.YELLOW);
+                else if (pos == 2) g.setColor(Color.LIGHT_GRAY);
+                else if (pos == 3) g.setColor(new Color(205, 127, 50)); // Bronze
+                else g.setColor(Color.WHITE);
+                
+                g.drawString(posStr, x + x_padding, y_list);
+                g.drawString(entry.username(), x + x_padding + 50, y_list);
+                g.drawString(scoreStr, x + x_padding + 210, y_list);
+                g.drawString(dateStr, x + x_padding + 360, y_list);
+                
+                y_list += 28; 
+                pos++;
+            }
+        }
 
         drawFooterHint(g, "(Pressione ENTER ou ESC para Voltar)");
     }
-
-    /**
-     * ATUALIZADO: Adiciona a regra de Nível.
-     */
+    
+    // (Os métodos drawRulesScreen, drawControlsScreen, drawGameOver, 
+    // drawPausedScreen, drawPausedRulesScreen, drawPausedControlsScreen, 
+    // e os helpers de desenho continuam exatamente os mesmos
+    // da versão anterior que eu enviei. Cole-os aqui se precisar, 
+    // mas eles não mudaram.)
+    
+    // ... (Cole os métodos restantes de draw...() aqui) ...
+    // ... (drawRulesScreen, drawControlsScreen, drawGameOver, etc.) ...
+        
     private void drawRulesScreen(Graphics2D g) {
         int cardWidth = 700; 
-        int cardHeight = 500; // <<< Aumenta a altura do card
+        int cardHeight = 500; 
         int x = getWidth() / 2 - cardWidth / 2;
         int y = 100;
         
@@ -260,29 +352,24 @@ public class OverlayPanel extends JPanel {
         int x_col1 = x + 50;
         int x_col2 = x + 370;
 
-        // --- Coluna 1: Pontuação ---
+        // Coluna 1
         g.setColor(Color.YELLOW);
         g.setFont(new Font("Consolas", Font.BOLD, 22));
         g.drawString("PONTUAÇÃO", x_col1, y_col);
-        
         g.setColor(Color.WHITE);
         g.setFont(new Font("Consolas", Font.PLAIN, 18));
         y_col += 40; 
         g.drawString("Pontos = Valor Base * Nível", x_col1, y_col);
-        
         g.setColor(Color.CYAN);
         y_col += 40; g.drawString("1 Linha   :  40 pts", x_col1, y_col);
         y_col += 30; g.drawString("2 Linhas  : 100 pts", x_col1, y_col);
         y_col += 30; g.drawString("3 Linhas  : 300 pts", x_col1, y_col);
         g.setColor(Color.ORANGE);
         y_col += 30; g.drawString("TETRIS (4): 1200 pts", x_col1, y_col);
-        
-        // --- CORREÇÃO: Adiciona Regra de Nível ---
-        y_col += 50; // Espaço extra
+        y_col += 50; 
         g.setColor(Color.YELLOW);
         g.setFont(new Font("Consolas", Font.BOLD, 22));
         g.drawString("NÍVEL", x_col1, y_col);
-
         g.setColor(Color.WHITE);
         g.setFont(new Font("Consolas", Font.PLAIN, 16));
         y_col += 30;
@@ -291,14 +378,12 @@ public class OverlayPanel extends JPanel {
                            "mais alto aumenta a velocidade\n" +
                            "do jogo e seus pontos.";
         y_col = drawMultiLineString(g, textNivel, x_col1, y_col);
-        // --- FIM DA CORREÇÃO ---
 
-        // --- Coluna 2: Lixo (Garbage) ---
-        y_col = y + 120; // Reseta Y
+        // Coluna 2
+        y_col = y + 120; 
         g.setColor(Color.YELLOW);
         g.setFont(new Font("Consolas", Font.BOLD, 22));
         g.drawString("LIXO (Modo 2P)", x_col2, y_col);
-
         g.setColor(Color.WHITE);
         g.setFont(new Font("Consolas", Font.PLAIN, 16));
         y_col += 40;
@@ -308,7 +393,6 @@ public class OverlayPanel extends JPanel {
                           "base do tabuleiro, empurrando \n" +
                           "as peças dele para cima.";
         y_col = drawMultiLineString(g, textLixo, x_col2, y_col);
-
         g.setColor(Color.LIGHT_GRAY);
         g.setFont(new Font("Consolas", Font.PLAIN, 18));
         y_col += 30; g.drawString("2 Linhas  -> Envia 1 Linha", x_col2, y_col);
@@ -335,36 +419,33 @@ public class OverlayPanel extends JPanel {
         int x_p2 = x + 370;
         int y_col;
 
-        // --- Coluna 1: Controles 1P ---
+        // Coluna 1
         g.setColor(Color.YELLOW);
         g.setFont(new Font("Consolas", Font.BOLD, 18));
         y_col = y_start;
         g.drawString("MODO 1 JOGADOR", x_p1, y_col);
-        drawControls1P(g, x_p1, y_col + 30); // Helper
+        drawControls1P(g, x_p1, y_col + 30);
         
-        // --- Coluna 2: Controles 2P ---
+        // Coluna 2
         g.setColor(Color.YELLOW);
         g.setFont(new Font("Consolas", Font.BOLD, 18));
         y_col = y_start;
         g.drawString("MODO 2 JOGADORES", x_p2, y_col);
-        drawControls2P(g, x_p2, y_col + 30); // Helper
+        drawControls2P(g, x_p2, y_col + 30);
         
-        // --- Controles Globais ---
+        // Controles Globais
         g.setColor(Color.YELLOW);
         g.setFont(new Font("Consolas", Font.BOLD, 18));
-        y_col = y_start + 230; // Posição fixa
+        y_col = y_start + 230; 
         g.drawString("CONTROLES GLOBAIS", x_p1, y_col);
-        
         g.setColor(Color.WHITE);
         g.setFont(new Font("Consolas", Font.PLAIN, 14));
         y_col += 30; g.drawString("P   Pausar Jogo", x_p1, y_col);
-        y_col += 20; g.drawString("T   Mudar Tema Visual", x_p1, y_col);
+        y_col += 20; g.drawString("T   Mudar Tema Visual", x_p1, y_col); 
         y_col += 20; g.drawString("G   Ativar/Desativar Prévia", x_p1, y_col);
         
         drawFooterHint(g, "(Pressione ENTER ou ESC para Voltar)");
     }
-
-    // --- ============ NOVOS OVERLAYS DE JOGO ============ ---
 
     private void drawGameOver(Graphics2D g) {
         int cardWidth = 450;
@@ -450,12 +531,9 @@ public class OverlayPanel extends JPanel {
         }
     }
     
-    /**
-     * ATUALIZADO: Aumenta a altura do Card para a regra de Nível.
-     */
     private void drawPausedRulesScreen(Graphics2D g) {
         int cardWidth = 400; 
-        int cardHeight = 500; // <<< Aumenta a altura
+        int cardHeight = 500; 
         int x = getWidth() / 2 - cardWidth / 2;
         int y = getHeight() / 2 - cardHeight / 2;
         
@@ -468,16 +546,14 @@ public class OverlayPanel extends JPanel {
         int y_col = y + 100;
         int x_col = x + 50;
 
-        // --- Coluna 1: Pontuação ---
+        // Pontuação
         g.setColor(Color.YELLOW);
         g.setFont(new Font("Consolas", Font.BOLD, 22));
         g.drawString("PONTUAÇÃO", x_col, y_col);
-        
         g.setColor(Color.WHITE);
         g.setFont(new Font("Consolas", Font.PLAIN, 18));
         y_col += 40; 
         g.drawString("Pontos = Valor Base * Nível", x_col, y_col);
-        
         g.setColor(Color.CYAN);
         y_col += 40; g.drawString("1 Linha   :  40 pts", x_col, y_col);
         y_col += 30; g.drawString("2 Linhas  : 100 pts", x_col, y_col);
@@ -485,27 +561,24 @@ public class OverlayPanel extends JPanel {
         g.setColor(Color.ORANGE);
         y_col += 30; g.drawString("TETRIS (4): 1200 pts", x_col, y_col);
         
-        // --- Adiciona Regra de Nível ---
+        // Nível
         y_col += 40; 
         g.setColor(Color.YELLOW);
         g.setFont(new Font("Consolas", Font.BOLD, 22));
         g.drawString("NÍVEL", x_col, y_col);
-
         g.setColor(Color.WHITE);
         g.setFont(new Font("Consolas", Font.PLAIN, 16));
         y_col += 30;
         String textNivel = "A cada 10 linhas limpas,\n" +
                            "você avança de nível.";
         y_col = drawMultiLineString(g, textNivel, x_col, y_col);
-        // --- Fim Nível ---
 
-        // --- Coluna 2: Lixo (Garbage) ---
+        // Lixo
         if (currentGameMode == GameController.GameMode.TWO_PLAYER) {
             y_col += 40;
             g.setColor(Color.YELLOW);
             g.setFont(new Font("Consolas", Font.BOLD, 22));
             g.drawString("LIXO (Modo 2P)", x_col, y_col);
-            
             g.setColor(Color.LIGHT_GRAY);
             g.setFont(new Font("Consolas", Font.PLAIN, 18));
             y_col += 30; g.drawString("2 Linhas  -> Envia 1 Linha", x_col, y_col);

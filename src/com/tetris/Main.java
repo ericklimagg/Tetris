@@ -4,6 +4,7 @@ import com.tetris.controller.GameController;
 import com.tetris.model.Board;
 import com.tetris.view.GameFrame;
 import javax.swing.SwingUtilities;
+import com.tetris.database.DatabaseManager; // 1. IMPORTA A NOVA CLASSE
 
 /**
  * Ponto de entrada principal da aplicação.
@@ -13,6 +14,15 @@ public class Main {
 
     public static void main(String[] args) {
         SwingUtilities.invokeLater(() -> {
+            
+            // --- NOVO PASSO ---
+            // Tenta conectar ao banco de dados ANTES de tudo.
+            // Se falhar, veremos o erro no console e o jogo pode nem abrir.
+            System.out.println("Main: Inicializando DatabaseManager...");
+            DatabaseManager.getInstance();
+            System.out.println("Main: DatabaseManager inicializado.");
+            // --- FIM DO NOVO PASSO ---
+
             // 1. Cria os Models (um para cada jogador)
             Board board1 = new Board();
             Board board2 = new Board();
