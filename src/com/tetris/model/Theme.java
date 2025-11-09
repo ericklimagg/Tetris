@@ -4,7 +4,7 @@ import java.awt.Color;
 
 /**
  * Representa um tema visual para o jogo, contendo todas as cores necessárias.
- * Usamos um 'record' para uma definição concisa e imutável de um tema.
+ * Utiliza um 'record' para uma definição concisa e imutável de um tema.
  */
 public record Theme(
     String name,
@@ -16,7 +16,7 @@ public record Theme(
     // --- Temas Pré-definidos ---
 
     /**
-     * O tema escuro original do jogo.
+     * O tema escuro padrão.
      */
     public static final Theme CLASSIC_DARK = new Theme(
         "Clássico Escuro",
@@ -32,7 +32,7 @@ public record Theme(
             new Color(204, 102, 204), // SquareShape
             new Color(102, 204, 204), // LShape
             new Color(218, 170, 0),    // MirroredLShape
-            new Color(80, 80, 80)     // NOVO: GarbageShape
+            new Color(80, 80, 80)     // GarbageShape
         }
     );
 
@@ -45,28 +45,28 @@ public record Theme(
         new Color(240, 240, 255),
         new Color(200, 200, 210),
         new Color[] {
-            new Color(0, 0, 0),
-            new Color(255, 80, 80),
-            new Color(80, 255, 80),
-            new Color(80, 80, 255),
-            new Color(255, 255, 80),
-            new Color(255, 80, 255),
-            new Color(80, 255, 255),
-            new Color(255, 170, 0),
-            new Color(130, 130, 130)  // NOVO: GarbageShape
+            new Color(0, 0, 0),       // NoShape
+            new Color(255, 80, 80),    // ZShape
+            new Color(80, 255, 80),    // SShape
+            new Color(80, 80, 255),    // LineShape
+            new Color(255, 255, 80),   // TShape
+            new Color(255, 80, 255),   // SquareShape
+            new Color(80, 255, 255),   // LShape
+            new Color(255, 170, 0),    // MirroredLShape
+            new Color(130, 130, 130)  // GarbageShape
         }
     );
     
     /**
-     * Um tema retro que imita as cores de um Game Boy.
+     * Um tema retro que imita as cores clássicas do Game Boy.
      */
     public static final Theme RETRO_GB = new Theme(
         "Retro GB",
-        new Color(155, 188, 15), // Fundo UI verde-claro
-        new Color(195, 228, 55), // Fundo do tabuleiro verde-claríssimo
-        new Color(135, 168, 15), // Grelha verde-escuro
+        new Color(155, 188, 15), // Fundo UI 
+        new Color(195, 228, 55), // Fundo do tabuleiro
+        new Color(135, 168, 15), // Grelha
          new Color[] {
-            new Color(15, 56, 15), // Todas as peças têm a mesma cor verde-escura
+            new Color(15, 56, 15), // Cor única para todas as peças
             new Color(15, 56, 15),
             new Color(15, 56, 15),
             new Color(15, 56, 15),
@@ -74,10 +74,12 @@ public record Theme(
             new Color(15, 56, 15),
             new Color(15, 56, 15),
             new Color(15, 56, 15),
-            new Color(15, 56, 15) // NOVO: GarbageShape (mesma cor)
+            new Color(15, 56, 15) // GarbageShape
         }
     );
 
-    // Array que contém todos os temas disponíveis para fácil acesso.
+    /**
+     * Array que expõe todos os temas disponíveis para o Controller/View.
+     */
     public static final Theme[] AVAILABLE_THEMES = { CLASSIC_DARK, LIGHT, RETRO_GB };
 }

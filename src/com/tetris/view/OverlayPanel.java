@@ -19,17 +19,19 @@ import java.awt.Graphics2D;
 import java.awt.RenderingHints; 
 
 /**
- * Um painel transparente que desenha os 'overlays' (telas por cima do jogo).
- * ATUALIZADO V4: Desenha a tela de seleção de perfil por lista e a de criação.
- * ATUALIZADO V5: Desenha mensagens de erro de perfil.
+ * Painel transparente (JLayeredPane) que desenha todas as telas de "overlay"
+ * (menus, pausa, game over, rankings) por cima do GamePanel.
+ * Esta classe contém a maior parte da lógica de renderização da UI.
  */
 public class OverlayPanel extends JPanel {
 
+    // Referências de estado (Model e Controller)
     private Board board1;
     private Board board2;
     private GameController.GameMode currentGameMode;
     private Theme currentTheme; 
     
+    // Estado da UI
     private GameScreen currentScreen;
     private int mainMenuSelection;
     private int modeSelectSelection;
@@ -37,34 +39,42 @@ public class OverlayPanel extends JPanel {
     private int pauseMenuSelection; 
     private int rankingModeSelection; 
     private int profileListSelection; 
+    private String playerNameInput = "";
+    private String profileErrorMessage = null; // Mensagem de erro para telas de perfil
 
-    // --- Variáveis do Banco de Dados ---
+    // Referências de dados (para rankings e perfis)
     private List<SoloScoreEntry> topSoloScores;
     private List<PlayerWinsEntry> top2PWins; 
     private List<PlayerProfile> allProfiles; 
-    private SimpleDateFormat dateFormat = new SimpleDateFormat("dd/MM/yyyy");
-    private String playerNameInput = "";
-    private String profileErrorMessage = null; // <-- NOVO CAMPO
     private PlayerProfile currentUser = null;  // P1
     private PlayerProfile currentUser2 = null; // P2
+    
+    private SimpleDateFormat dateFormat = new SimpleDateFormat("dd/MM/yyyy");
 
 
     public OverlayPanel() {
-        setOpaque(false); 
+        setOpaque(false); // Essencial para ser um overlay transparente
     }
     
+    /**
+     * Atualiza o tema visual a ser usado.
+     */
     public void updateTheme(Theme theme) {
         this.currentTheme = theme;
     }
 
-    // --- ASSINATURA DO MÉTODO ATUALIZADA (ROBUSTA V4) ---
+    /**
+     * Método principal de "injeção de estado". O GameController chama este método
+     * a cada tick para fornecer ao OverlayPanel todos os dados necessários
+     * para desenhar a tela correta.
+     */
     public void updateMenuState(Board board1, Board board2, GameController.GameMode mode, 
                                 GameScreen screen, int mainSelection, int modeSelectSelection,
                                 int gameOverSelection, int pauseSelection, int rankingModeSelection,
                                 int profileListSelection, 
                                 List<SoloScoreEntry> topSoloScores, List<PlayerWinsEntry> top2PWins,
                                 List<PlayerProfile> allProfiles, 
-                                String playerNameInput, String profileErrorMessage, // <-- NOVO
+                                String playerNameInput, String profileErrorMessage,
                                 PlayerProfile currentUser, PlayerProfile currentUser2) { 
         this.board1 = board1;
         this.board2 = board2;
@@ -80,12 +90,15 @@ public class OverlayPanel extends JPanel {
         this.top2PWins = top2PWins;           
         this.allProfiles = allProfiles;           
         this.playerNameInput = playerNameInput; 
-        this.profileErrorMessage = profileErrorMessage; // <-- NOVO
+        this.profileErrorMessage = profileErrorMessage; 
         this.currentUser = currentUser;       
         this.currentUser2 = currentUser2;     
     }
-    // --- FIM DA ATUALIZAÇÃO ---
     
+    /**
+     * (Método legado, pode ser obsoleto) Atualiza apenas os tabuleiros.
+     * 'updateMenuState' é geralmente preferido.
+     */
     public void updateBoards(Board board1, Board board2) {
          this.board1 = board1;
          this.board2 = board2;
@@ -97,7 +110,7 @@ public class OverlayPanel extends JPanel {
         super.paintComponent(g);
 
         if (board1 == null || board2 == null || currentTheme == null) {
-            return;
+            return; // Não desenha se o estado não foi inicializado
         }
         
         Graphics2D g2d = (Graphics2D) g;
@@ -109,13 +122,17 @@ public class OverlayPanel extends JPanel {
                             currentScreen == GameScreen.PAUSED_CONTROLS ||
                             currentScreen == GameScreen.PAUSED_RULES);
 
+        // Roteador de renderização principal
         if (isGameActive) {
+            // Jogo está rodando
             if (isGameOver) {
-                g.setColor(new Color(0, 0, 0, 200)); 
+                // Desenha overlay de Game Over
+                g.setColor(new Color(0, 0, 0, 200)); // Fundo escuro semi-transparente
                 g.fillRect(0, 0, getWidth(), getHeight());
                 drawGameOver(g2d); 
             
             } else if (isPaused) {
+                // Desenha overlay de Pausa
                 g.setColor(new Color(0, 0, 0, 180)); 
                 g.fillRect(0, 0, getWidth(), getHeight());
                 
@@ -127,15 +144,19 @@ public class OverlayPanel extends JPanel {
                     drawPausedRulesScreen(g2d);
                 }
             }
+            // Se o jogo está ativo e não pausado/game over, não desenha nada (painel transparente).
+            
         } else {
+            // Jogo não está ativo (estamos nos menus principais)
             g.setColor(currentTheme.uiBackground()); 
             g.fillRect(0, 0, getWidth(), getHeight());
             
-            g.setColor(new Color(0, 0, 0, 200));
+            g.setColor(new Color(0, 0, 0, 200)); // Overlay escuro para destacar o menu
             g.fillRect(0, 0, getWidth(), getHeight());
 
             if (currentScreen == null) return; 
 
+            // Roteia para a tela de menu específica
             switch (currentScreen) {
                 case MAIN_MENU:
                     drawStartScreen(g2d);
@@ -168,7 +189,7 @@ public class OverlayPanel extends JPanel {
                     drawControlsScreen(g2d);
                     break;
                 default:
-                    drawStartScreen(g2d);
+                    drawStartScreen(g2d); // Tela padrão
                     break;
             }
         }
@@ -176,41 +197,53 @@ public class OverlayPanel extends JPanel {
 
     // --- ============ MÉTODOS DE DESENHO DE MENU ============ ---
     
+    /**
+     * Helper para desenhar o "card" de fundo dos menus.
+     */
     private void drawMenuCard(Graphics2D g, int x, int y, int width, int height) {
-        g.setColor(new Color(20, 20, 30, 220)); 
+        g.setColor(new Color(20, 20, 30, 220)); // Fundo do card (escuro, semi-transparente)
         g.fillRoundRect(x, y, width, height, 25, 25);
-        g.setColor(currentTheme.grid().brighter()); 
+        g.setColor(currentTheme.grid().brighter()); // Borda do card
         g.drawRoundRect(x, y, width, height, 25, 25);
     }
     
+    /**
+     * Helper para desenhar o título principal dos menus (ex: "TETRIS", "RANKING").
+     */
     private void drawMenuTitle(Graphics2D g, String title) {
         g.setFont(new Font("Consolas", Font.BOLD, 72));
         g.setColor(Color.WHITE);
         drawCenteredString(g, title, getWidth() / 2, 120);
         
-        g.setColor(Color.CYAN);
+        g.setColor(Color.CYAN); // Linha sublinhada
         g.fillRect(getWidth() / 2 - 100, 140, 200, 4);
     }
     
+    /**
+     * Helper para desenhar o texto de dica no rodapé das telas de menu.
+     */
     private void drawFooterHint(Graphics2D g, String text) {
         g.setFont(new Font("Consolas", Font.PLAIN, 16));
         g.setColor(Color.GRAY);
         drawCenteredString(g, text, getWidth() / 2, getHeight() - 60);
     }
     
-    // --- NOVO HELPER ---
-    /** Desenha a mensagem de erro (se houver) na base do card */
+    /**
+     * Helper para desenhar a mensagem de erro (se existir) na base de um card de menu.
+     */
     private void drawErrorMessage(Graphics2D g, int card_y, int card_height) {
         if (profileErrorMessage != null && !profileErrorMessage.isEmpty()) {
             g.setColor(Color.RED);
             g.setFont(new Font("Consolas", Font.BOLD, 18));
-            // Posiciona a 30px de baixo do card
+            // Posiciona a mensagem perto da base do card
             drawCenteredString(g, profileErrorMessage, getWidth() / 2, card_y + card_height - 35);
         }
     }
-    // --- FIM DO NOVO HELPER ---
 
 
+    /**
+     * Desenha a tela do Menu Principal (Jogar, Ranking, etc.).
+     */
     private void drawStartScreen(Graphics2D g) {
         drawMenuTitle(g, "T E T R I S");
         
@@ -228,6 +261,7 @@ public class OverlayPanel extends JPanel {
         boolean cursorVisible = (System.currentTimeMillis() / 400) % 2 == 0;
         String selector = cursorVisible ? ">" : " ";
         
+        // Desenha as opções do menu, destacando a selecionada
         for (int i = 0; i < options.length; i++) {
             if (i == mainMenuSelection) {
                 g.setColor(Color.YELLOW);
@@ -242,6 +276,9 @@ public class OverlayPanel extends JPanel {
         drawFooterHint(g, "(Use ↑↓ para selecionar, ENTER para confirmar)");
     }
     
+    /**
+     * Desenha a tela de seleção de perfil (para P1 ou P2).
+     */
     private void drawProfileSelectionScreen(Graphics2D g, int playerNum) {
         int cardWidth = 500; 
         int cardHeight = 450; 
@@ -256,6 +293,7 @@ public class OverlayPanel extends JPanel {
         String title = (playerNum == 1) ? "JOGADOR 1" : "JOGADOR 2";
         drawCenteredString(g, title, getWidth() / 2, y + 70); 
 
+        // Se for P2, mostra quem está logado como P1
         if (playerNum == 2 && currentUser != null) {
             g.setFont(new Font("Consolas", Font.PLAIN, 14));
             g.setColor(Color.LIGHT_GRAY);
@@ -273,15 +311,18 @@ public class OverlayPanel extends JPanel {
         boolean cursorVisible = (System.currentTimeMillis() / 400) % 2 == 0;
         String selector = cursorVisible ? ">" : " ";
 
+        // Desenha a lista de perfis carregados
         if (allProfiles != null) {
             for (int i = 0; i < allProfiles.size(); i++) {
                 PlayerProfile profile = allProfiles.get(i);
                 String name = profile.getUsername();
                 
+                // Se for P2, "desabilita" (em cinza) o perfil já selecionado pelo P1
                 if (playerNum == 2 && currentUser != null && currentUser.getUserID() == profile.getUserID()) {
                     g.setColor(Color.GRAY); 
                     drawCenteredString(g, name, list_x, y_list);
                 } else {
+                    // Destaca o perfil selecionado
                     if (i == profileListSelection) {
                         g.setColor(Color.YELLOW);
                         drawCenteredString(g, selector + " " + name, list_x, y_list);
@@ -294,6 +335,7 @@ public class OverlayPanel extends JPanel {
             }
         }
 
+        // Desenha a opção [CRIAR NOVO USUÁRIO]
         int createOptionIndex = (allProfiles != null) ? allProfiles.size() : 0;
         if (profileListSelection == createOptionIndex) {
             g.setColor(Color.GREEN); 
@@ -303,12 +345,13 @@ public class OverlayPanel extends JPanel {
             drawCenteredString(g, "[CRIAR NOVO USUÁRIO]", list_x, y_list);
         }
         
-        // --- NOVO: Desenha a mensagem de erro ---
         drawErrorMessage(g, y, cardHeight);
-        
         drawFooterHint(g, "(Use ↑↓ para selecionar, ENTER para confirmar, ESC para voltar)");
     }
 
+    /**
+     * Desenha a tela de criação de novo perfil (entrada de texto).
+     */
     private void drawProfileCreateScreen(Graphics2D g) {
         int cardWidth = 500; 
         int cardHeight = 300;
@@ -330,18 +373,20 @@ public class OverlayPanel extends JPanel {
         g.setFont(new Font("Consolas", Font.BOLD, 28));
         g.setColor(Color.WHITE);
         
+        // Simula um cursor piscando
         boolean cursorVisible = (System.currentTimeMillis() / 400) % 2 == 0;
         String nameStr = playerNameInput + (cursorVisible ? "_" : "");
         
         drawCenteredString(g, nameStr, getWidth() / 2, y + 210);
         
-        // --- NOVO: Desenha a mensagem de erro ---
         drawErrorMessage(g, y, cardHeight);
-
         drawFooterHint(g, "(A-Z, 0-9) | ENTER para Confirmar | ESC para Voltar à Lista");
     }
 
 
+    /**
+     * Desenha a tela de seleção de modo (1P ou 2P).
+     */
     private void drawModeSelectScreen(Graphics2D g) {
         drawMenuTitle(g, "T E T R I S");
 
@@ -373,6 +418,9 @@ public class OverlayPanel extends JPanel {
         drawFooterHint(g, "(Pressione ESC para Voltar ao Menu)");
     }
 
+    /**
+     * Desenha a tela de seleção de modo de ranking (1P ou 2P).
+     */
     private void drawRankingModeSelectScreen(Graphics2D g) {
         drawMenuTitle(g, "RANKING");
 
@@ -405,6 +453,9 @@ public class OverlayPanel extends JPanel {
     }
 
 
+    /**
+     * Desenha a tela de Ranking 1P (High Scores).
+     */
     private void drawRankingScreen(Graphics2D g) {
         int cardWidth = 650; 
         int cardHeight = 550; 
@@ -417,6 +468,7 @@ public class OverlayPanel extends JPanel {
         g.setFont(new Font("Consolas", Font.BOLD, 32));
         drawCenteredString(g, "RANKING 1P (MELHOR SCORE)", getWidth() / 2, y + 50);
 
+        // Cabeçalho da tabela
         g.setColor(Color.YELLOW);
         g.setFont(new Font("Consolas", Font.BOLD, 16));
         int y_list = y + 100;
@@ -436,6 +488,7 @@ public class OverlayPanel extends JPanel {
         g.setColor(Color.WHITE);
         g.setFont(new Font("Consolas", Font.PLAIN, 16));
 
+        // Desenha as entradas do ranking
         if (topSoloScores == null || topSoloScores.isEmpty()) {
             drawCenteredString(g, "Nenhuma pontuação registrada.", getWidth() / 2, y + 250);
         
@@ -448,6 +501,7 @@ public class OverlayPanel extends JPanel {
                 String linesStr = String.format("%03d", entry.linesCleared()); 
                 String dateStr = dateFormat.format(entry.date());
 
+                // Colore as 3 primeiras posições
                 if (pos == 1) g.setColor(Color.YELLOW);
                 else if (pos == 2) g.setColor(Color.LIGHT_GRAY);
                 else if (pos == 3) g.setColor(new Color(205, 127, 50)); // Bronze
@@ -468,6 +522,9 @@ public class OverlayPanel extends JPanel {
         drawFooterHint(g, "(Pressione ENTER ou ESC para Voltar)");
     }
     
+    /**
+     * Desenha a tela de Ranking 2P (Vitórias).
+     */
     private void drawRanking2PScreen(Graphics2D g) {
         int cardWidth = 450; 
         int cardHeight = 550; 
@@ -480,6 +537,7 @@ public class OverlayPanel extends JPanel {
         g.setFont(new Font("Consolas", Font.BOLD, 32));
         drawCenteredString(g, "RANKING 2P (VITÓRIAS)", getWidth() / 2, y + 50);
 
+        // Cabeçalho da tabela
         g.setColor(Color.YELLOW);
         g.setFont(new Font("Consolas", Font.BOLD, 16));
         int y_list = y + 100;
@@ -495,6 +553,7 @@ public class OverlayPanel extends JPanel {
         g.setColor(Color.WHITE);
         g.setFont(new Font("Consolas", Font.PLAIN, 16));
 
+        // Desenha as entradas do ranking
         if (top2PWins == null || top2PWins.isEmpty()) {
             drawCenteredString(g, "Nenhuma vitória registrada.", getWidth() / 2, y + 250);
         
@@ -521,8 +580,9 @@ public class OverlayPanel extends JPanel {
         drawFooterHint(g, "(Pressione ENTER ou ESC para Voltar)");
     }
     
-    // ... (Métodos de desenhar Pausa, Regras, Controles, GameOver, e Helpers) ...
-    
+    /**
+     * Desenha a tela de Regras (visível no menu principal ou pausa).
+     */
     private void drawRulesScreen(Graphics2D g) {
         int cardWidth = 700; 
         int cardHeight = 500; 
@@ -539,7 +599,7 @@ public class OverlayPanel extends JPanel {
         int x_col1 = x + 50;
         int x_col2 = x + 370;
 
-        // Coluna 1
+        // Coluna 1: Pontuação e Nível
         g.setColor(Color.YELLOW);
         g.setFont(new Font("Consolas", Font.BOLD, 22));
         g.drawString("PONTUAÇÃO", x_col1, y_col);
@@ -566,7 +626,7 @@ public class OverlayPanel extends JPanel {
                            "do jogo e seus pontos.";
         y_col = drawMultiLineString(g, textNivel, x_col1, y_col);
 
-        // Coluna 2
+        // Coluna 2: Lixo (Modo 2P)
         y_col = y + 120; 
         g.setColor(Color.YELLOW);
         g.setFont(new Font("Consolas", Font.BOLD, 22));
@@ -589,6 +649,9 @@ public class OverlayPanel extends JPanel {
         drawFooterHint(g, "(Pressione ENTER ou ESC para Voltar)");
     }
 
+    /**
+     * Desenha a tela de Controles (visível no menu principal).
+     */
     private void drawControlsScreen(Graphics2D g) {
         int cardWidth = 700;
         int cardHeight = 450;
@@ -606,14 +669,14 @@ public class OverlayPanel extends JPanel {
         int x_p2 = x + 370;
         int y_col;
 
-        // Coluna 1
+        // Coluna 1: Controles 1P
         g.setColor(Color.YELLOW);
         g.setFont(new Font("Consolas", Font.BOLD, 18));
         y_col = y_start;
         g.drawString("MODO 1 JOGADOR", x_p1, y_col);
         drawControls1P(g, x_p1, y_col + 30);
         
-        // Coluna 2
+        // Coluna 2: Controles 2P
         g.setColor(Color.YELLOW);
         g.setFont(new Font("Consolas", Font.BOLD, 18));
         y_col = y_start;
@@ -634,6 +697,9 @@ public class OverlayPanel extends JPanel {
         drawFooterHint(g, "(Pressione ENTER ou ESC para Voltar)");
     }
 
+    /**
+     * Desenha a tela de Fim de Jogo.
+     */
     private void drawGameOver(Graphics2D g) {
         int cardWidth = 450;
         int cardHeight = 300;
@@ -651,6 +717,7 @@ public class OverlayPanel extends JPanel {
             g.setColor(Color.RED);
             drawCenteredString(g, "GAME OVER", getWidth() / 2, y_center); 
         } else {
+            // Modo 2P: Determina Vencedor/Perdedor
             String p1_name = (currentUser != null) ? currentUser.getUsername() : "P1";
             String p2_name = (currentUser2 != null) ? currentUser2.getUsername() : "P2";
 
@@ -675,6 +742,7 @@ public class OverlayPanel extends JPanel {
             }
         }
         
+        // Opções (Reiniciar / Menu)
         g.setFont(new Font("Consolas", Font.PLAIN, 24));
         int y_menu = y_center + 80;
         
@@ -692,6 +760,9 @@ public class OverlayPanel extends JPanel {
         }
     }
     
+    /**
+     * Desenha o menu de Pausa principal.
+     */
     private void drawPausedScreen(Graphics2D g) {
         int cardWidth = 450;
         int cardHeight = 280;
@@ -721,6 +792,9 @@ public class OverlayPanel extends JPanel {
         }
     }
     
+    /**
+     * Desenha a tela de Regras (versão da Pausa, pode ser diferente da do menu principal).
+     */
     private void drawPausedRulesScreen(Graphics2D g) {
         int cardWidth = 400; 
         int cardHeight = 500; 
@@ -763,7 +837,7 @@ public class OverlayPanel extends JPanel {
                            "você avança de nível.";
         y_col = drawMultiLineString(g, textNivel, x_col, y_col);
 
-        // Lixo
+        // Lixo (só mostra se estiver em modo 2P)
         if (currentGameMode == GameController.GameMode.TWO_PLAYER) {
             y_col += 40;
             g.setColor(Color.YELLOW);
@@ -779,6 +853,9 @@ public class OverlayPanel extends JPanel {
         drawFooterHint(g, "(Pressione ENTER ou ESC para Voltar)");
     }
     
+    /**
+     * Desenha a tela de Controles (versão da Pausa, específica para o modo atual).
+     */
     private void drawPausedControlsScreen(Graphics2D g) {
         int cardWidth = 400; 
         int cardHeight = 350;
@@ -794,6 +871,7 @@ public class OverlayPanel extends JPanel {
         int y_start = y + 100;
         int x_col = getWidth() / 2 - 150; 
 
+        // Mostra apenas os controles do modo de jogo atual
         if (currentGameMode == GameController.GameMode.ONE_PLAYER) {
             g.setColor(Color.YELLOW);
             g.setFont(new Font("Consolas", Font.BOLD, 18));
@@ -807,8 +885,11 @@ public class OverlayPanel extends JPanel {
         drawFooterHint(g, "(Pressione ENTER ou ESC para Voltar)");
     }
     
-    // --- ============ Helpers de Desenho ============ ---
+    // --- ============ Helpers de Desenho de Texto e Controles ============ ---
     
+    /**
+     * Helper para desenhar a lista de controles do 1P.
+     */
     private int drawControls1P(Graphics g, int x, int y) {
         g.setColor(Color.WHITE);
         g.setFont(new Font("Consolas", Font.PLAIN, 14));
@@ -821,6 +902,9 @@ public class OverlayPanel extends JPanel {
         return y;
     }
     
+    /**
+     * Helper para desenhar a lista de controles do 2P.
+     */
     private int drawControls2P(Graphics g, int x, int y) {
         g.setColor(Color.CYAN);
         g.setFont(new Font("Consolas", Font.BOLD, 16));
@@ -845,18 +929,25 @@ public class OverlayPanel extends JPanel {
         return y;
     }
     
+    /**
+     * Helper para desenhar texto centralizado horizontalmente.
+     */
     private void drawCenteredString(Graphics g, String text, int x_center, int y) {
         FontMetrics metrics = g.getFontMetrics(g.getFont());
         int x = x_center - (metrics.stringWidth(text) / 2);
         g.drawString(text, x, y);
     }
     
+    /**
+     * Helper para desenhar blocos de texto com quebra de linha (definida por '\n').
+     * @return A próxima posição Y (abaixo do texto).
+     */
     private int drawMultiLineString(Graphics g, String text, int x, int y) {
         FontMetrics metrics = g.getFontMetrics(g.getFont());
         int lineHeight = metrics.getHeight();
         for (String line : text.split("\n")) {
             g.drawString(line, x, y);
-            y += lineHeight;
+            y += lineHeight; // Move para a próxima linha
         }
         return y;
     }

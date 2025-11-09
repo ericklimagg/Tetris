@@ -5,13 +5,14 @@ import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
-import java.util.Properties; // NOVO IMPORT
-import java.io.FileInputStream; // NOVO IMPORT
-import java.io.IOException;     // NOVO IMPORT
+import java.util.Properties;
+import java.io.FileInputStream;
+import java.io.IOException;
 
 /**
  * Gerencia a conexão com o banco de dados SQL Server usando o padrão Singleton.
- * ATUALIZADO: Carrega credenciais de um arquivo 'config.properties' externo.
+ * Esta classe é responsável por carregar as credenciais de 'config.properties'
+ * e fornecer uma instância de conexão única e centralizada para os DAOs.
  */
 public class DatabaseManager {
 
@@ -21,12 +22,13 @@ public class DatabaseManager {
     private Connection connection;
 
     // --- Configurações Carregadas ---
-    // A String de conexão agora é inicializada em um bloco estático
+    // A String de conexão é final e inicializada no bloco estático.
     private static final String CONNECTION_STRING;
 
     /**
-     * Bloco estático para carregar as configurações ANTES de qualquer
-     * outra coisa.
+     * Bloco estático para carregar as configurações do 'config.properties'
+     * ANTES que qualquer instância do DatabaseManager seja criada.
+     * Isso garante que a conexão possa ser estabelecida no construtor.
      */
     static {
         Properties props = new Properties();
@@ -63,7 +65,7 @@ public class DatabaseManager {
 
     /**
      * Construtor privado (parte do padrão Singleton).
-     * Tenta carregar o driver e conectar ao banco.
+     * Tenta carregar o driver JDBC e conectar-se ao banco de dados.
      */
     private DatabaseManager() {
         try {
@@ -72,7 +74,7 @@ public class DatabaseManager {
             
             System.out.println("DatabaseManager: Conectando ao SQL Server...");
             
-            // 2. Tenta estabelecer a conexão (agora usa a CONNECTION_STRING carregada)
+            // 2. Tenta estabelecer a conexão
             this.connection = DriverManager.getConnection(CONNECTION_STRING);
             
             System.out.println("DatabaseManager: Conexão estabelecida com sucesso!");
@@ -92,7 +94,8 @@ public class DatabaseManager {
 
     /**
      * Ponto de acesso global para a instância do Singleton.
-     * É 'synchronized' para evitar problemas com múltiplas threads.
+     * É 'synchronized' para garantir a segurança em ambientes com múltiplas threads
+     * durante a primeira inicialização.
      */
     public static synchronized DatabaseManager getInstance() {
         if (instance == null) {
@@ -118,14 +121,17 @@ public class DatabaseManager {
     }
 
     /**
-     * Helper para fechar recursos do JDBC de forma segura.
+     * Método utilitário para fechar recursos do JDBC (Statement e ResultSet) de forma segura.
      */
     public static void close(Connection conn, Statement stmt, ResultSet rs) {
         try { if (rs != null) rs.close(); } catch (SQLException e) { /* ignora */ }
         try { if (stmt != null) stmt.close(); } catch (SQLException e) { /* ignora */ }
-        // Não fechamos a 'conn' aqui
+        // A conexão (conn) não é fechada aqui, pois é gerenciada pelo Singleton.
     }
     
+    /**
+     * Sobrecarga do método close para quando não há um Connection a ser fechado.
+     */
     public static void close(Statement stmt, ResultSet rs) {
         close(null, stmt, rs);
     }
