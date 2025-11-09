@@ -10,7 +10,6 @@ import java.util.List;
 
 /**
  * DAO para a tabela SoloScores.
- * Lida com salvar pontuações 1P e ler o ranking 1P.
  */
 public class SoloScoreDAO {
 
@@ -20,21 +19,20 @@ public class SoloScoreDAO {
         this.connection = DatabaseManager.getInstance().getConnection();
     }
 
-    /**
-     * Adiciona uma nova pontuação 1P (SoloScore) associada a um UserID.
-     * @param userID O ID do usuário que fez a pontuação.
-     * @param score A pontuação.
-     */
-    public void addScore(int userID, int score) {
+    public void addScore(int userID, int score, int level, int linesCleared, int tetrisCount) {
         if (score <= 0) {
-            return; // Não salva pontuação zero
+            return;
         }
 
-        String sql = "INSERT INTO SoloScores (UserID, Score) VALUES (?, ?)";
+        String sql = "INSERT INTO SoloScores (UserID, Score, Level, LinesCleared, TetrisCount) " +
+                     "VALUES (?, ?, ?, ?, ?)";
         
         try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
             pstmt.setInt(1, userID);
             pstmt.setInt(2, score);
+            pstmt.setInt(3, level);
+            pstmt.setInt(4, linesCleared);
+            pstmt.setInt(5, tetrisCount);
             pstmt.executeUpdate();
             
             System.out.println("SoloScoreDAO: Pontuação 1P de " + score + " salva para UserID " + userID);
@@ -44,31 +42,30 @@ public class SoloScoreDAO {
         }
     }
 
-    /**
-     * Retorna as X melhores pontuações 1P do banco (com nomes).
-     * @param limit O número de pontuações a retornar (ex: 10).
-     * @return Uma lista de SoloScoreEntry.
-     */
     public List<SoloScoreEntry> getTopSoloScores(int limit) {
         List<SoloScoreEntry> topScores = new ArrayList<>();
         
-        // SQL Robusto: Faz um JOIN entre SoloScores e PlayerProfiles para pegar o nome
-        String sql = "SELECT TOP (?) p.Username, s.Score, s.DateAchieved " +
+        String sql = "SELECT TOP (?) " +
+                     "    p.Username, s.Score, s.Level, s.LinesCleared, s.TetrisCount, s.DateAchieved " +
                      "FROM SoloScores s " +
                      "JOIN PlayerProfiles p ON s.UserID = p.UserID " +
                      "ORDER BY s.Score DESC";
 
         try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
             
-            pstmt.setInt(1, limit); // TOP (?)
+            pstmt.setInt(1, limit);
             
             try (ResultSet rs = pstmt.executeQuery()) {
                 while (rs.next()) {
                     String username = rs.getString("Username");
                     int score = rs.getInt("Score");
-                    Date date = rs.getTimestamp("DateAchieved"); 
+                    int level = rs.getInt("Level");
+                    int linesCleared = rs.getInt("LinesCleared");
+                    int tetrisCount = rs.getInt("TetrisCount");
+                    Date date = rs.getTimestamp("DateAchieved");
                     
-                    topScores.add(new SoloScoreEntry(username, score, date));
+                    topScores.add(new SoloScoreEntry(username, score, level, 
+                                                     linesCleared, tetrisCount, date));
                 }
             }
 
