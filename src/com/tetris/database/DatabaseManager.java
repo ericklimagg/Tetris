@@ -5,10 +5,13 @@ import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.Properties; // NOVO IMPORT
+import java.io.FileInputStream; // NOVO IMPORT
+import java.io.IOException;     // NOVO IMPORT
 
 /**
  * Gerencia a conexão com o banco de dados SQL Server usando o padrão Singleton.
- * Isso garante que o jogo inteiro use apenas UMA conexão.
+ * ATUALIZADO: Carrega credenciais de um arquivo 'config.properties' externo.
  */
 public class DatabaseManager {
 
@@ -17,17 +20,46 @@ public class DatabaseManager {
 
     private Connection connection;
 
-    // --- Suas Configurações (Prontas!) ---
-    private static final String DB_HOST = "localhost";
-    private static final String DB_PORT = "1433"; // Porta padrão do SQL Server
-    private static final String DB_NAME = "TetrisDB";
-    private static final String DB_USER = "sa";
-    private static final String DB_PASSWORD = "Papagaio@83";
-    
-    // String de conexão final
-    private static final String CONNECTION_STRING = 
-        String.format("jdbc:sqlserver://%s:%s;databaseName=%s;user=%s;password=%s;encrypt=true;trustServerCertificate=true;",
-        DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASSWORD);
+    // --- Configurações Carregadas ---
+    // A String de conexão agora é inicializada em um bloco estático
+    private static final String CONNECTION_STRING;
+
+    /**
+     * Bloco estático para carregar as configurações ANTES de qualquer
+     * outra coisa.
+     */
+    static {
+        Properties props = new Properties();
+        String host, port, name, user, password;
+
+        try (FileInputStream fis = new FileInputStream("config.properties")) {
+            props.load(fis);
+            
+            host = props.getProperty("db.host");
+            port = props.getProperty("db.port");
+            name = props.getProperty("db.name");
+            user = props.getProperty("db.user");
+            password = props.getProperty("db.password");
+
+            if (user == null || password == null) {
+                throw new RuntimeException("Erro: 'db.user' ou 'db.password' não encontrado em config.properties");
+            }
+
+        } catch (IOException e) {
+            System.err.println("--- ERRO CRÍTICO ---");
+            System.err.println("Não foi possível carregar o arquivo 'config.properties'!");
+            System.err.println("Verifique se o arquivo está na raiz do projeto.");
+            e.printStackTrace();
+            // Lança um erro para impedir a aplicação de continuar sem o banco
+            throw new RuntimeException("Falha ao carregar config.properties", e);
+        }
+
+        // Constrói a String de conexão final
+        CONNECTION_STRING = String.format(
+            "jdbc:sqlserver://%s:%s;databaseName=%s;user=%s;password=%s;encrypt=true;trustServerCertificate=true;",
+            host, port, name, user, password
+        );
+    }
 
     /**
      * Construtor privado (parte do padrão Singleton).
@@ -40,7 +72,7 @@ public class DatabaseManager {
             
             System.out.println("DatabaseManager: Conectando ao SQL Server...");
             
-            // 2. Tenta estabelecer a conexão
+            // 2. Tenta estabelecer a conexão (agora usa a CONNECTION_STRING carregada)
             this.connection = DriverManager.getConnection(CONNECTION_STRING);
             
             System.out.println("DatabaseManager: Conexão estabelecida com sucesso!");
@@ -53,7 +85,7 @@ public class DatabaseManager {
         } catch (SQLException e) {
             System.err.println("--- ERRO CRÍTICO ---");
             System.err.println("Falha ao conectar ao banco de dados!");
-            System.err.println("Verifique suas credenciais, firewall e se o SQL Server (Docker) está rodando.");
+            System.err.println("Verifique suas credenciais (config.properties), firewall e se o SQL Server (Docker) está rodando.");
             e.printStackTrace();
         }
     }

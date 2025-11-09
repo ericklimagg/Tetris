@@ -6,10 +6,9 @@ import com.tetris.view.GameFrame;
 import com.tetris.audio.AudioManager;
 import com.tetris.database.PlayerProfileDAO;
 import com.tetris.database.SoloScoreDAO;
-import com.tetris.database.MultiplayerMatchDAO;
 import com.tetris.database.PlayerProfile;
 import com.tetris.database.SoloScoreEntry;
-import com.tetris.database.RankingEntry2P;
+import com.tetris.database.PlayerWinsEntry;
 
 import javax.swing.Timer;
 import java.awt.event.ActionEvent;
@@ -20,7 +19,7 @@ import java.util.List;
 
 /**
  * O Controller no padrão MVC.
- * ATUALIZADO: Sistema completo de perfis e ranking (1P e 2P).
+ * ATUALIZADO V6: Adiciona feedback visual para erros de perfil.
  */
 public class GameController extends KeyAdapter implements ActionListener {
 
@@ -32,15 +31,17 @@ public class GameController extends KeyAdapter implements ActionListener {
     public enum GameScreen {
         MAIN_MENU,
         MODE_SELECT,
-        RANKING_SCREEN_1P,
+        RANKING_MODE_SELECT, 
+        RANKING_SCREEN, 
         RANKING_SCREEN_2P,
         RULES_SCREEN,
         CONTROLS_SCREEN,
         PAUSED_MAIN,
         PAUSED_CONTROLS,
         PAUSED_RULES,
-        PROFILE_SELECTION,
-        PLAYER2_PROFILE_SELECTION
+        PROFILE_SELECTION,    
+        PROFILE_SELECTION_P2, 
+        PROFILE_CREATE        
     }
 
     private static final int INITIAL_DELAY = 400;
@@ -54,25 +55,26 @@ public class GameController extends KeyAdapter implements ActionListener {
 
     private final PlayerProfileDAO profileDAO;
     private final SoloScoreDAO soloScoreDAO;
-    private final MultiplayerMatchDAO multiplayerDAO;
-    
-    private PlayerProfile currentUser = null;
-    private PlayerProfile player2User = null;
-    
-    private List<SoloScoreEntry> topSoloScores;
-    private List<RankingEntry2P> topMultiplayerRanking;
-    
-    private String playerNameInput = "";
-    private String player2NameInput = "";
+    private PlayerProfile currentUser = null;   
+    private PlayerProfile currentUser2 = null;  
+    private List<SoloScoreEntry> topSoloScores; 
+    private List<PlayerWinsEntry> top2PWins;    
+    private List<PlayerProfile> allProfiles; 
 
+    private String playerNameInput = ""; 
+    private String profileErrorMessage = null; // <-- NOVO CAMPO
+    
     private int currentThemeIndex = 0;
     private GameMode currentGameMode = GameMode.ONE_PLAYER;
     
     private GameScreen currentScreen = GameScreen.MAIN_MENU;
     private int mainMenuSelection = 0;
-    private final int MAIN_MENU_OPTIONS = 6;
+    private final int MAIN_MENU_OPTIONS = 5; 
     private int modeSelectSelection = 0;
     private final int MODE_SELECT_OPTIONS = 2; 
+    private int rankingModeSelection = 0; 
+    private final int RANKING_MODE_OPTIONS = 2; 
+    private int profileListSelection = 0; 
     
     private int gameOverSelection = 0; 
     private final int GAMEOVER_MENU_OPTIONS = 2;
@@ -82,6 +84,7 @@ public class GameController extends KeyAdapter implements ActionListener {
     
     private long lastPieceMoveTime1;
     private long lastPieceMoveTime2;
+
 
     public GameController(GameFrame gameFrame, Board board1, Board board2) {
         this.gameFrame = gameFrame;
@@ -98,7 +101,6 @@ public class GameController extends KeyAdapter implements ActionListener {
         
         this.profileDAO = new PlayerProfileDAO();
         this.soloScoreDAO = new SoloScoreDAO();
-        this.multiplayerDAO = new MultiplayerMatchDAO();
     }
 
     public void start() {
@@ -117,10 +119,13 @@ public class GameController extends KeyAdapter implements ActionListener {
                                 currentScreen != GameScreen.PAUSED_CONTROLS &&
                                 currentScreen != GameScreen.PAUSED_RULES &&
                                 currentScreen != GameScreen.PROFILE_SELECTION &&
-                                currentScreen != GameScreen.PLAYER2_PROFILE_SELECTION;
+                                currentScreen != GameScreen.PROFILE_SELECTION_P2 &&
+                                currentScreen != GameScreen.PROFILE_CREATE; 
                                 
         if (isGameRunning) {
             
+            // ... (Lógica do loop de jogo: handlePlayerLogic, garbage, detecção de game over) ...
+            // ... (Esta parte não muda) ...
             long currentTime = System.currentTimeMillis();
             long delay1 = getDelayForLevel(board1);
             handlePlayerLogic(board1, currentTime, lastPieceMoveTime1, delay1);
@@ -140,7 +145,7 @@ public class GameController extends KeyAdapter implements ActionListener {
                 if (p1_garbage > 0 || p2_garbage > 0) {
                     if (p1_garbage > p2_garbage) {
                         board2.addIncomingGarbage(p1_garbage - p2_garbage);
-                    } else if (p2_garbage > p1_garbage) {
+                    } else if (p2_garbage > p1_garbage) { 
                         board1.addIncomingGarbage(p2_garbage - p1_garbage);
                     }
                     board1.clearOutgoingGarbage();
@@ -161,8 +166,8 @@ public class GameController extends KeyAdapter implements ActionListener {
                         backgroundMusic.stopMusic();
                     }
                     
-                    if (currentGameMode == GameMode.ONE_PLAYER && p1_over && currentUser != null) {
-                        if (board1.getScore() > 0) {
+                    if (currentGameMode == GameMode.ONE_PLAYER && p1_over) {
+                        if (currentUser != null && board1.getScore() > 0) {
                             soloScoreDAO.addScore(
                                 currentUser.getUserID(), 
                                 board1.getScore(),
@@ -170,38 +175,39 @@ public class GameController extends KeyAdapter implements ActionListener {
                                 board1.getLinesCleared(),
                                 board1.getTetrisCount()
                             );
+                            profileDAO.updateStats1P(currentUser.getUserID(), board1.getScore());
+
+                            if (board1.getScore() > currentUser.getHighScore1P()) {
+                                fetchAllProfiles(); 
+                                currentUser = profileDAO.findUserByUsername(currentUser.getUsername());
+                            }
                         }
-                        profileDAO.updateStats1P(currentUser.getUserID(), board1.getScore());
-                        
-                    } else if (currentGameMode == GameMode.TWO_PLAYER && currentUser != null && player2User != null) {
-                        int winnerID = -1;
-                        int loserID = -1;
-                        int winnerScore = 0;
-                        int loserScore = 0;
-                        
-                        if (p1_over && !p2_over) {
-                            board2.addWin();
-                            winnerID = player2User.getUserID();
-                            loserID = currentUser.getUserID();
-                            winnerScore = board2.getScore();
-                            loserScore = board1.getScore();
-                        } else if (p2_over && !p1_over) {
-                            board1.addWin();
-                            winnerID = currentUser.getUserID();
-                            loserID = player2User.getUserID();
-                            winnerScore = board1.getScore();
-                            loserScore = board2.getScore();
-                        }
-                        
-                        if (winnerID != -1 && loserID != -1) {
-                            profileDAO.updateStats2P(winnerID, loserID);
-                            multiplayerDAO.recordMatch(winnerID, loserID, winnerScore, loserScore);
-                        }
+                    
+                    } else if (currentGameMode == GameMode.TWO_PLAYER) {
+                         if (currentUser != null && currentUser2 != null) {
+                            PlayerProfile winner = null;
+                            PlayerProfile loser = null;
+                            
+                            if (p1_over && !p2_over) { // P2 Venceu
+                                board2.addWin();
+                                winner = currentUser2;
+                                loser = currentUser;
+                            } else if (p2_over && !p1_over) { // P1 Venceu
+                                board1.addWin();
+                                winner = currentUser;
+                                loser = currentUser2;
+                            }
+                            
+                            if (winner != null && loser != null) {
+                                profileDAO.updateStats2P(winner.getUserID(), loser.getUserID());
+                            }
+                         }
                     }
                     
                     gameOverSelection = 0;
                 }
             }
+            
         }
         
         updateView();
@@ -222,6 +228,7 @@ public class GameController extends KeyAdapter implements ActionListener {
         }
     }
 
+
     private void updateView() {
         gameFrame.getGamePanel().getBoardPanel1().updateBoard(board1);
         gameFrame.getGamePanel().getInfoPanel1().updateInfo(board1);
@@ -235,6 +242,17 @@ public class GameController extends KeyAdapter implements ActionListener {
         
         gameFrame.getOverlayPanel().updateTheme(currentTheme);
 
+        int hScore1 = (currentUser != null) ? currentUser.getHighScore1P() : 0;
+        gameFrame.getGamePanel().getInfoPanel1().setHighScore(hScore1);
+
+        if (currentGameMode == GameMode.TWO_PLAYER && currentUser2 != null) {
+            int hScore2 = currentUser2.getHighScore1P();
+            gameFrame.getGamePanel().getInfoPanel2().setHighScore(hScore2);
+        } else {
+            gameFrame.getGamePanel().getInfoPanel2().setHighScore(0); 
+        }
+
+        // --- CHAMADA ATUALIZADA ---
         gameFrame.getOverlayPanel().updateMenuState(
             board1, 
             board2, 
@@ -244,13 +262,17 @@ public class GameController extends KeyAdapter implements ActionListener {
             modeSelectSelection,
             gameOverSelection,
             pauseMenuSelection,
+            rankingModeSelection, 
+            profileListSelection, 
             topSoloScores,     
-            topMultiplayerRanking,
+            top2PWins,         
+            allProfiles,       
             playerNameInput,   
-            player2NameInput,
+            profileErrorMessage, // <-- NOVO
             currentUser,
-            player2User
+            currentUser2       
         );
+        // --- FIM DA ATUALIZAÇÃO ---
 
         gameFrame.getGamePanel().updateTheme(currentTheme);
         gameFrame.repaint();
@@ -259,14 +281,30 @@ public class GameController extends KeyAdapter implements ActionListener {
     @Override
     public void keyPressed(KeyEvent e) {
         
+        // Limpa a mensagem de erro a cada tecla pressionada nos menus de perfil
+        if (currentScreen == GameScreen.PROFILE_SELECTION ||
+            currentScreen == GameScreen.PROFILE_SELECTION_P2 ||
+            currentScreen == GameScreen.PROFILE_CREATE) {
+            profileErrorMessage = null;
+        }
+
         if (currentScreen == GameScreen.PROFILE_SELECTION) {
-            handleProfileSelectionKeys(e);
+            handleProfileListKeys(e, 1); 
             updateView();
             return; 
         }
-        
-        if (currentScreen == GameScreen.PLAYER2_PROFILE_SELECTION) {
-            handlePlayer2ProfileSelectionKeys(e);
+        if (currentScreen == GameScreen.PROFILE_SELECTION_P2) {
+            handleProfileListKeys(e, 2); 
+            updateView();
+            return;
+        }
+        if (currentScreen == GameScreen.PROFILE_CREATE) {
+            handleProfileCreateKeys(e);
+            updateView();
+            return;
+        }
+        if (currentScreen == GameScreen.RANKING_MODE_SELECT) {
+            handleRankingModeSelectKeys(e);
             updateView();
             return;
         }
@@ -293,27 +331,123 @@ public class GameController extends KeyAdapter implements ActionListener {
         updateView();
     }
     
-    private void handleProfileSelectionKeys(KeyEvent e) {
+    private void handleProfileListKeys(KeyEvent e, int playerNum) {
+        int keycode = e.getKeyCode();
+        
+        int numOptions = (allProfiles != null ? allProfiles.size() : 0) + 1; // +1 para "Criar Novo"
+
+        if (keycode == KeyEvent.VK_UP || keycode == KeyEvent.VK_W) {
+            profileListSelection = (profileListSelection - 1 + numOptions) % numOptions;
+        }
+        if (keycode == KeyEvent.VK_DOWN || keycode == KeyEvent.VK_S) {
+            profileListSelection = (profileListSelection + 1) % numOptions;
+        }
+        
+        if (keycode == KeyEvent.VK_ESCAPE || keycode == KeyEvent.VK_BACK_SPACE) {
+            currentScreen = GameScreen.MODE_SELECT;
+            allProfiles = null; 
+            currentUser = null;
+            currentUser2 = null;
+            return;
+        }
+
+        if (keycode == KeyEvent.VK_ENTER) {
+            if (profileListSelection == numOptions - 1) { 
+                playerNameInput = "";
+                currentScreen = GameScreen.PROFILE_CREATE; 
+            
+            } else if (allProfiles != null && profileListSelection < allProfiles.size()) {
+                PlayerProfile selectedProfile = allProfiles.get(profileListSelection);
+                
+                // --- ATUALIZADO: Define mensagem de erro ---
+                if (playerNum == 2 && currentUser != null && selectedProfile.getUserID() == currentUser.getUserID()) {
+                    System.err.println("GameController: P2 não pode ser o mesmo que P1.");
+                    profileErrorMessage = "P2 NÃO PODE SER IGUAL AO P1!";
+                    return; 
+                }
+                // --- FIM DA ATUALIZAÇÃO ---
+                
+                if (playerNum == 1) {
+                    currentUser = profileDAO.findUserByUsername(selectedProfile.getUsername()); 
+                    System.out.println("GameController: P1 logado como " + currentUser.getUsername());
+                    
+                    if (currentGameMode == GameMode.ONE_PLAYER) {
+                        startGame(); 
+                    } else {
+                        profileListSelection = 0; 
+                        currentScreen = GameScreen.PROFILE_SELECTION_P2;
+                    }
+                } else { // playerNum == 2
+                    currentUser2 = profileDAO.findUserByUsername(selectedProfile.getUsername()); 
+                    System.out.println("GameController: P2 logado como " + currentUser2.getUsername());
+                    startGame(); 
+                }
+            }
+        }
+    }
+
+    private void handleProfileCreateKeys(KeyEvent e) {
         int keycode = e.getKeyCode();
 
         if (keycode == KeyEvent.VK_ENTER) {
             String cleanUsername = playerNameInput.trim();
-            if (!cleanUsername.isEmpty()) {
-                this.currentUser = profileDAO.findOrCreatePlayer(cleanUsername);
+            if (cleanUsername.isEmpty()) return;
+
+            // --- ATUALIZADO: Define mensagem de erro ---
+            if (currentGameMode == GameMode.TWO_PLAYER && 
+                currentUser != null && 
+                cleanUsername.equalsIgnoreCase(currentUser.getUsername())) {
                 
-                if (this.currentUser != null) {
-                    System.out.println("GameController: P1 logado como " + this.currentUser.getUsername());
-                    currentScreen = GameScreen.MODE_SELECT;
-                } else {
-                    System.err.println("GameController: Erro ao logar P1.");
-                }
+                System.err.println("GameController: P2 não pode ser o mesmo que P1 (Criação).");
+                profileErrorMessage = "P2 NÃO PODE SER IGUAL AO P1!";
+                return;
             }
+            
+            PlayerProfile existingUser = profileDAO.findUserByUsername(cleanUsername);
+            
+            if (existingUser != null) {
+                System.err.println("GameController: Nome de usuário já existe.");
+                profileErrorMessage = "NOME DE USUÁRIO JÁ EXISTE!";
+                return; // Impede a criação, fica na tela
+            }
+            // --- FIM DA ATUALIZAÇÃO ---
+
+            // Se não existe, cria
+            PlayerProfile profile = profileDAO.findOrCreatePlayer(cleanUsername);
+            if (profile == null) {
+                System.err.println("GameController: Erro ao criar perfil (nome inválido?).");
+                profileErrorMessage = "NOME INVÁLIDO!";
+                return;
+            }
+            
+            if (currentUser == null) {
+                currentUser = profile;
+                System.out.println("GameController: P1 criado/logado como " + currentUser.getUsername());
+                
+                if (currentGameMode == GameMode.ONE_PLAYER) {
+                    startGame(); 
+                } else {
+                    fetchAllProfiles(); 
+                    profileListSelection = 0; 
+                    currentScreen = GameScreen.PROFILE_SELECTION_P2; 
+                }
+            } else { 
+                currentUser2 = profile;
+                System.out.println("GameController: P2 criado/logado como " + currentUser2.getUsername());
+                startGame(); 
+            }
+
         } else if (keycode == KeyEvent.VK_BACK_SPACE) {
             if (!playerNameInput.isEmpty()) {
                 playerNameInput = playerNameInput.substring(0, playerNameInput.length() - 1);
             }
         } else if (keycode == KeyEvent.VK_ESCAPE) {
-            currentScreen = GameScreen.MAIN_MENU;
+            if (currentUser == null) { 
+                currentScreen = GameScreen.PROFILE_SELECTION;
+            } else { 
+                currentScreen = GameScreen.PROFILE_SELECTION_P2;
+            }
+            playerNameInput = "";
         
         } else {
             char c = e.getKeyChar();
@@ -323,48 +457,43 @@ public class GameController extends KeyAdapter implements ActionListener {
         }
     }
     
-    private void handlePlayer2ProfileSelectionKeys(KeyEvent e) {
+    private void handleRankingModeSelectKeys(KeyEvent e) {
         int keycode = e.getKeyCode();
 
-        if (keycode == KeyEvent.VK_ENTER) {
-            String cleanUsername = player2NameInput.trim();
-            if (!cleanUsername.isEmpty()) {
-                if (currentUser != null && cleanUsername.equalsIgnoreCase(currentUser.getUsername())) {
-                    System.out.println("GameController: P2 não pode ter o mesmo nome que P1!");
-                    player2NameInput = "";
-                    return;
-                }
-                
-                this.player2User = profileDAO.findOrCreatePlayer(cleanUsername);
-                
-                if (this.player2User != null) {
-                    System.out.println("GameController: P2 logado como " + this.player2User.getUsername());
-                    startGame(GameMode.TWO_PLAYER);
-                } else {
-                    System.err.println("GameController: Erro ao logar P2.");
-                }
-            }
-        } else if (keycode == KeyEvent.VK_BACK_SPACE) {
-            if (!player2NameInput.isEmpty()) {
-                player2NameInput = player2NameInput.substring(0, player2NameInput.length() - 1);
-            }
-        } else if (keycode == KeyEvent.VK_ESCAPE) {
-            currentScreen = GameScreen.MODE_SELECT;
-            player2NameInput = "";
+        if (keycode == KeyEvent.VK_UP || keycode == KeyEvent.VK_W) {
+            rankingModeSelection = (rankingModeSelection - 1 + RANKING_MODE_OPTIONS) % RANKING_MODE_OPTIONS;
+        }
+        if (keycode == KeyEvent.VK_DOWN || keycode == KeyEvent.VK_S) {
+            rankingModeSelection = (rankingModeSelection + 1) % RANKING_MODE_OPTIONS;
+        }
+        if (keycode == KeyEvent.VK_ESCAPE || keycode == KeyEvent.VK_BACK_SPACE) {
+            currentScreen = GameScreen.MAIN_MENU;
+        }
         
-        } else {
-            char c = e.getKeyChar();
-            if ((Character.isLetterOrDigit(c)) && player2NameInput.length() < 15) {
-                player2NameInput += Character.toUpperCase(c);
+        if (keycode == KeyEvent.VK_ENTER) {
+            switch (rankingModeSelection) {
+                case 0: 
+                    this.topSoloScores = soloScoreDAO.getTopSoloScores(10); 
+                    currentScreen = GameScreen.RANKING_SCREEN; 
+                    break;
+                case 1: 
+                    this.top2PWins = profileDAO.getTopPlayerWins(10);
+                    currentScreen = GameScreen.RANKING_SCREEN_2P;
+                    break;
             }
         }
     }
 
-    private void startGame(GameMode mode) {
-        currentGameMode = mode;
-        
+    private void startGame() {
         gameFrame.getGamePanel().setMode(currentGameMode); 
         gameFrame.packAndCenter();
+        
+        if (currentUser != null) {
+            gameFrame.getGamePanel().getInfoPanel1().setPlayerName(currentUser.getUsername());
+        }
+        if (currentGameMode == GameMode.TWO_PLAYER && currentUser2 != null) {
+            gameFrame.getGamePanel().getInfoPanel2().setPlayerName(currentUser2.getUsername());
+        }
         
         board1.start();
         if (currentGameMode == GameMode.TWO_PLAYER) {
@@ -395,7 +524,7 @@ public class GameController extends KeyAdapter implements ActionListener {
         
         if (keycode == KeyEvent.VK_ENTER) {
             if (gameOverSelection == 0) { 
-                startGame(currentGameMode); 
+                startGame(); 
             } else { 
                 goToMenu();
             }
@@ -450,6 +579,10 @@ public class GameController extends KeyAdapter implements ActionListener {
         lastPieceMoveTime2 = currentTime;
     }
     
+    private void fetchAllProfiles() {
+        this.allProfiles = profileDAO.getAllPlayerProfiles();
+    }
+
     private void goToMenu() {
         if (backgroundMusic != null) {
             backgroundMusic.stopMusic();
@@ -458,19 +591,23 @@ public class GameController extends KeyAdapter implements ActionListener {
         board1.resetForMenu();
         board2.resetForMenu();
         
+        gameFrame.getGamePanel().getInfoPanel1().setPlayerName(null);
+        gameFrame.getGamePanel().getInfoPanel2().setPlayerName(null);
+        
         gameFrame.getGamePanel().setMode(GameController.GameMode.TWO_PLAYER);
         gameFrame.packAndCenter(); 
         gameFrame.getGamePanel().setMode(GameController.GameMode.ONE_PLAYER); 
 
         currentScreen = GameScreen.MAIN_MENU;
         mainMenuSelection = 0;
-        topSoloScores = null;
-        topMultiplayerRanking = null;
+        topSoloScores = null; 
+        top2PWins = null; 
+        allProfiles = null; 
         
         currentUser = null;
-        player2User = null;
+        currentUser2 = null; 
         playerNameInput = "";
-        player2NameInput = "";
+        profileErrorMessage = null; // <-- Limpa erro
     }
 
     private void handleGameKeys(int keycode) {
@@ -513,6 +650,7 @@ public class GameController extends KeyAdapter implements ActionListener {
         }
         if (currentGameMode == GameMode.TWO_PLAYER) {
             switch (keycode) {
+                // P1
                 case KeyEvent.VK_A: if (p1_canPlay) board1.moveLeft(); break;
                 case KeyEvent.VK_D: if (p1_canPlay) board1.moveRight(); break;
                 case KeyEvent.VK_S: 
@@ -529,6 +667,7 @@ public class GameController extends KeyAdapter implements ActionListener {
                         lastPieceMoveTime1 = System.currentTimeMillis();
                     }
                     break;
+                // P2
                 case KeyEvent.VK_LEFT: if (p2_canPlay) board2.moveLeft(); break;
                 case KeyEvent.VK_RIGHT: if (p2_canPlay) board2.moveRight(); break;
                 case KeyEvent.VK_DOWN: 
@@ -564,21 +703,17 @@ public class GameController extends KeyAdapter implements ActionListener {
                 }
                 if (keycode == KeyEvent.VK_ENTER) {
                     switch (mainMenuSelection) {
-                        case 0:
-                            playerNameInput = ""; 
-                            currentScreen = GameScreen.PROFILE_SELECTION; 
+                        case 0: 
+                            currentScreen = GameScreen.MODE_SELECT; 
+                            modeSelectSelection = 0;
                             break; 
-                        case 1:
-                            this.topSoloScores = soloScoreDAO.getTopSoloScores(10); 
-                            currentScreen = GameScreen.RANKING_SCREEN_1P; 
+                        case 1: 
+                            currentScreen = GameScreen.RANKING_MODE_SELECT; 
+                            rankingModeSelection = 0;
                             break; 
-                        case 2:
-                            this.topMultiplayerRanking = multiplayerDAO.getTopPlayers(10);
-                            currentScreen = GameScreen.RANKING_SCREEN_2P;
-                            break;
-                        case 3: currentScreen = GameScreen.RULES_SCREEN; break; 
-                        case 4: currentScreen = GameScreen.CONTROLS_SCREEN; break; 
-                        case 5: System.exit(0); break; 
+                        case 2: currentScreen = GameScreen.RULES_SCREEN; break; 
+                        case 3: currentScreen = GameScreen.CONTROLS_SCREEN; break; 
+                        case 4: System.exit(0); break; 
                     }
                 }
                 break;
@@ -592,24 +727,31 @@ public class GameController extends KeyAdapter implements ActionListener {
                 }
                 if (keycode == KeyEvent.VK_ENTER) {
                     if (modeSelectSelection == 0) {
-                        startGame(GameMode.ONE_PLAYER);
+                        currentGameMode = GameMode.ONE_PLAYER;
                     } else {
-                        player2NameInput = "";
-                        currentScreen = GameScreen.PLAYER2_PROFILE_SELECTION;
+                        currentGameMode = GameMode.TWO_PLAYER;
                     }
+                    fetchAllProfiles(); 
+                    profileListSelection = 0; 
+                    currentScreen = GameScreen.PROFILE_SELECTION; 
                 }
                 if (keycode == KeyEvent.VK_ESCAPE || keycode == KeyEvent.VK_BACK_SPACE) {
                     currentScreen = GameScreen.MAIN_MENU;
-                    currentUser = null;
                 }
                 break;
                 
-            case RANKING_SCREEN_1P:
-            case RANKING_SCREEN_2P:
+            case RANKING_SCREEN:
+            case RANKING_SCREEN_2P: 
             case RULES_SCREEN:
             case CONTROLS_SCREEN:
                 if (keycode == KeyEvent.VK_ENTER || keycode == KeyEvent.VK_ESCAPE || keycode == KeyEvent.VK_BACK_SPACE) {
-                    currentScreen = GameScreen.MAIN_MENU;
+                    if (currentScreen == GameScreen.RANKING_SCREEN || currentScreen == GameScreen.RANKING_SCREEN_2P) {
+                        currentScreen = GameScreen.RANKING_MODE_SELECT;
+                        topSoloScores = null; 
+                        top2PWins = null;     
+                    } else {
+                        currentScreen = GameScreen.MAIN_MENU;
+                    }
                 }
                 break;
             

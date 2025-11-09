@@ -11,7 +11,8 @@ import java.util.Random;
 
 /**
  * Representa o estado completo do tabuleiro de jogo.
- * ATUALIZADO: Adiciona contador de Vitórias e HighScore estático (global).
+ * ATUALIZADO: Remove sistema de highscore estático (baseado em arquivo).
+ * O highscore agora é gerenciado pelo PlayerProfile.
  */
 public class Board {
 
@@ -19,12 +20,11 @@ public class Board {
     public static final int BOARD_WIDTH = 10;
     public static final int BOARD_HEIGHT = 20;
     private static final int LEVEL_UP_LINES = 10;
-    private static final String HIGHSCORE_FILE = "highscore.txt";
+    // private static final String HIGHSCORE_FILE = "highscore.txt"; // REMOVIDO
     private static final int LINE_CLEAR_ANIMATION_TICKS = 8; 
 
     // --- Estado Global (Estático) ---
-    private static int highScore = 0;
-    private static boolean isHighScoreLoaded = false; // <<< NOVO
+    // REMOVIDOS: highScore e isHighScoreLoaded
 
     // --- Estado da Instância ---
     private boolean isStarted = false;
@@ -37,7 +37,7 @@ public class Board {
     private int linesCleared = 0;
     private int totalPieces = 0;
     private int tetrisCount = 0;
-    private int wins = 0; // <<< NOVO: Contador de vitórias
+    private int wins = 0; 
     
     // --- Variáveis de Lixo (Garbage) ---
     private int incomingGarbage = 0;
@@ -60,12 +60,8 @@ public class Board {
         currentPiece = new Piece();
         nextPiece = new Piece();
         
-        // --- ATUALIZADO: Carrega o HighScore apenas uma vez ---
-        if (!isHighScoreLoaded) {
-            loadHighScore();
-            isHighScoreLoaded = true;
-        }
-        // --- FIM ---
+        // Bloco de carregamento do HighScore REMOVIDO
+        
         clearBoard();
     }
 
@@ -122,12 +118,8 @@ public class Board {
             isGameOver = true;
             currentPiece.setShape(Shape.Tetrominoe.NoShape);
             
-            // --- ATUALIZADO: Salva o HighScore global ---
-            if (score > highScore) {
-                highScore = score;
-                saveHighScore();
-            }
-            // --- FIM ---
+            // Lógica de salvar HighScore REMOVIDA
+            // (Agora é feito no GameController)
         }
     }
 
@@ -317,22 +309,7 @@ public class Board {
         score += points[lines] * level;
     }
     
-    // --- ATUALIZADO: Métodos de HighScore agora são ESTÁTICOS ---
-    private static void loadHighScore() {
-        try (BufferedReader reader = new BufferedReader(new FileReader(HIGHSCORE_FILE))) {
-            highScore = Integer.parseInt(reader.readLine());
-        } catch (IOException | NumberFormatException e) {
-            highScore = 0;
-        }
-    }
-    private static void saveHighScore() {
-        try (BufferedWriter writer = new BufferedWriter(new FileWriter(HIGHSCORE_FILE))) {
-            writer.write(String.valueOf(highScore));
-        } catch (IOException e) {
-            System.err.println("Erro ao salvar o high score: " + e.getMessage());
-        }
-    }
-    // --- FIM ---
+    // --- Métodos de HighScore (load/save/get) REMOVIDOS ---
     
     public void decrementLineClearTimer() {
         if (lineClearTimer > 0) {
@@ -340,14 +317,13 @@ public class Board {
         }
     }
     
-    // --- NOVO: Métodos de Vitória ---
+    // --- Métodos de Vitória ---
     public void addWin() {
         this.wins++;
     }
     public int getWins() {
         return this.wins;
     }
-    // --- FIM NOVO ---
 
     // --- Getters para o View e Controller ---
     public Shape.Tetrominoe shapeAt(int x, int y) {
@@ -359,8 +335,7 @@ public class Board {
     public boolean isGhostPieceEnabled() { return isGhostPieceEnabled; }
     public int getScore() { return score; }
     
-    // HighScore agora é estático
-    public static int getHighScore() { return highScore; } 
+    // getHighScore() estático REMOVIDO
     
     public int getLevel() { return level; }
     public int getLinesCleared() { return linesCleared; }

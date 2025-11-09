@@ -1,0 +1,14 @@
+# Ignorar arquivos de configuração com senhas
+config.properties
+
+# Ignorar a pasta de build (binários)
+bin/
+
+# Ignorar bibliotecas (o .jar do driver)
+lib/
+
+# Ignorar arquivos do VSCode
+.vscode/
+
+# Ignorar arquivos temporários do sistema
+*.DS_Store

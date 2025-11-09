@@ -12,10 +12,11 @@ import java.awt.Font;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
+import java.awt.FontMetrics; 
 
 /**
  * Painel responsável por exibir as informações do jogo (pontuação, nível, etc.).
- * ATUALIZADO: Adiciona 'Vitórias' e usa HighScore estático.
+ * ATUALIZADO V3: Recebe o high score do GameController.
  */
 public class InfoPanel extends JPanel {
 
@@ -25,12 +26,13 @@ public class InfoPanel extends JPanel {
     private Board board;
     private Theme currentTheme;
     
-    // --- NOVO CAMPO ---
-    private boolean showVictories = false; // Por padrão, não mostra
+    private boolean showVictories = false; 
+    private String playerName = null; 
+    private int currentHighScore = 0; // <-- NOVO CAMPO
 
     public InfoPanel() {
         this.currentTheme = Theme.AVAILABLE_THEMES[0];
-        setPreferredSize(new Dimension(PANEL_WIDTH, 1)); // A altura será definida pelo layout
+        setPreferredSize(new Dimension(PANEL_WIDTH, 1)); 
         setBackground(currentTheme.uiBackground());
     }
 
@@ -43,14 +45,23 @@ public class InfoPanel extends JPanel {
         setBackground(theme.uiBackground());
     }
     
-    // --- NOVO MÉTODO ---
-    /**
-     * Define se o painel de vitórias deve ser exibido.
-     * Chamado pelo GamePanel ao trocar de modo.
-     */
     public void setShowVictories(boolean show) {
         this.showVictories = show;
     }
+
+    public void setPlayerName(String name) {
+        this.playerName = name;
+    }
+
+    // --- NOVO MÉTODO ---
+    /**
+     * Define o high score (do perfil) a ser exibido.
+     * @param score O high score do jogador.
+     */
+    public void setHighScore(int score) {
+        this.currentHighScore = score;
+    }
+    // --- FIM DO NOVO MÉTODO ---
 
     @Override
     protected void paintComponent(Graphics g) {
@@ -77,24 +88,33 @@ public class InfoPanel extends JPanel {
         int blockHeight = 60;
         int spacing = 15;
         
-        int currentY = 40;
+        int currentY = 40; 
 
-        // --- ATUALIZADO: Chama Board.getHighScore() (estático) ---
-        currentY = drawInfoBlock(g2d, "HIGH SCORE", String.format("%06d", Board.getHighScore()), padding, currentY, blockWidth, blockHeight, textColor);
+        if (playerName != null && !playerName.isEmpty()) {
+            g2d.setColor(Color.CYAN); 
+            g2d.setFont(new Font("Consolas", Font.BOLD, 22));
+            
+            FontMetrics fm = g2d.getFontMetrics();
+            int nameWidth = fm.stringWidth(playerName);
+            g2d.drawString(playerName, (PANEL_WIDTH - nameWidth) / 2, currentY);
+            
+            currentY += 30; 
+        }
+
+        // --- ATUALIZADO ---
+        // Agora usa o campo 'currentHighScore' em vez de Board.getHighScore()
+        currentY = drawInfoBlock(g2d, "HIGH SCORE", String.format("%06d", this.currentHighScore), padding, currentY, blockWidth, blockHeight, textColor);
+        // --- FIM DA ATUALIZAÇÃO ---
         currentY += spacing;
         
-        // --- LÓGICA ATUALIZADA ---
-        // Só desenha o card de Vitórias se 'showVictories' for verdadeiro
         if (this.showVictories) {
             currentY = drawInfoBlock(g2d, "VITÓRIAS", String.format("%03d", board.getWins()), padding, currentY, blockWidth, blockHeight, textColor);
             currentY += spacing;
         }
-        // --- FIM DA ATUALIZAÇÃO ---
         
         currentY = drawInfoBlock(g2d, "PONTUAÇÃO", String.format("%06d", board.getScore()), padding, currentY, blockWidth, blockHeight, textColor);
         currentY += spacing;
         
-        // Blocos lado a lado para Nível e Linhas
         int halfWidth = (blockWidth - spacing) / 2;
         drawInfoBlock(g2d, "NÍVEL", String.format("%02d", board.getLevel()), padding, currentY, halfWidth, blockHeight, textColor);
         drawInfoBlock(g2d, "LINHAS", String.format("%03d", board.getLinesCleared()), padding + halfWidth + spacing, currentY, halfWidth, blockHeight, textColor);
@@ -104,16 +124,11 @@ public class InfoPanel extends JPanel {
         drawInfoBlock(g2d, "PEÇAS", String.format("%04d", board.getTotalPieces()), padding + halfWidth + spacing, currentY, halfWidth, blockHeight, textColor);
         currentY += blockHeight + spacing;
 
-
-        // Bloco da Próxima Peça com altura aumentada
         currentY = drawNextPiecePanel(g2d, "PRÓXIMA PEÇA", padding, currentY, blockWidth, 110, textColor);
         
-        // Bloco de Dica de Controle na parte inferior
         drawControlHintBlock(g2d, "PAUSA (P)", padding, getHeight() - 85, blockWidth, 60, textColor);
     }
     
-    // ... (Restante dos métodos drawInfoBlock, drawNextPiecePanel, etc. continuam iguais) ...
-    // ... (drawSquare, etc.) ...
     
     private int drawInfoBlock(Graphics2D g, String title, String value, int x, int y, int width, int height, Color textColor) {
         Color blockColor = currentTheme.uiBackground().darker();

@@ -5,7 +5,7 @@ import com.tetris.controller.GameController.GameScreen;
 import com.tetris.model.Board;
 import com.tetris.model.Theme; 
 import com.tetris.database.SoloScoreEntry;
-import com.tetris.database.RankingEntry2P;
+import com.tetris.database.PlayerWinsEntry; 
 import com.tetris.database.PlayerProfile;
 
 import java.util.List; 
@@ -20,7 +20,8 @@ import java.awt.RenderingHints;
 
 /**
  * Um painel transparente que desenha os 'overlays' (telas por cima do jogo).
- * ATUALIZADO: Adiciona Ranking 2P e Login do Jogador 2.
+ * ATUALIZADO V4: Desenha a tela de seleção de perfil por lista e a de criação.
+ * ATUALIZADO V5: Desenha mensagens de erro de perfil.
  */
 public class OverlayPanel extends JPanel {
 
@@ -34,14 +35,19 @@ public class OverlayPanel extends JPanel {
     private int modeSelectSelection;
     private int gameOverSelection; 
     private int pauseMenuSelection; 
+    private int rankingModeSelection; 
+    private int profileListSelection; 
 
+    // --- Variáveis do Banco de Dados ---
     private List<SoloScoreEntry> topSoloScores;
-    private List<RankingEntry2P> topMultiplayerRanking;
+    private List<PlayerWinsEntry> top2PWins; 
+    private List<PlayerProfile> allProfiles; 
     private SimpleDateFormat dateFormat = new SimpleDateFormat("dd/MM/yyyy");
     private String playerNameInput = "";
-    private String player2NameInput = "";
-    private PlayerProfile currentUser = null;
-    private PlayerProfile player2User = null;
+    private String profileErrorMessage = null; // <-- NOVO CAMPO
+    private PlayerProfile currentUser = null;  // P1
+    private PlayerProfile currentUser2 = null; // P2
+
 
     public OverlayPanel() {
         setOpaque(false); 
@@ -51,13 +57,15 @@ public class OverlayPanel extends JPanel {
         this.currentTheme = theme;
     }
 
+    // --- ASSINATURA DO MÉTODO ATUALIZADA (ROBUSTA V4) ---
     public void updateMenuState(Board board1, Board board2, GameController.GameMode mode, 
                                 GameScreen screen, int mainSelection, int modeSelectSelection,
-                                int gameOverSelection, int pauseSelection, 
-                                List<SoloScoreEntry> topSoloScores,
-                                List<RankingEntry2P> topMultiplayerRanking,
-                                String playerNameInput, String player2NameInput,
-                                PlayerProfile currentUser, PlayerProfile player2User) {
+                                int gameOverSelection, int pauseSelection, int rankingModeSelection,
+                                int profileListSelection, 
+                                List<SoloScoreEntry> topSoloScores, List<PlayerWinsEntry> top2PWins,
+                                List<PlayerProfile> allProfiles, 
+                                String playerNameInput, String profileErrorMessage, // <-- NOVO
+                                PlayerProfile currentUser, PlayerProfile currentUser2) { 
         this.board1 = board1;
         this.board2 = board2;
         this.currentGameMode = mode;
@@ -66,13 +74,23 @@ public class OverlayPanel extends JPanel {
         this.modeSelectSelection = modeSelectSelection;
         this.gameOverSelection = gameOverSelection;
         this.pauseMenuSelection = pauseSelection; 
-        this.topSoloScores = topSoloScores;
-        this.topMultiplayerRanking = topMultiplayerRanking;
-        this.playerNameInput = playerNameInput;
-        this.player2NameInput = player2NameInput;
-        this.currentUser = currentUser;
-        this.player2User = player2User;
+        this.rankingModeSelection = rankingModeSelection; 
+        this.profileListSelection = profileListSelection; 
+        this.topSoloScores = topSoloScores;     
+        this.top2PWins = top2PWins;           
+        this.allProfiles = allProfiles;           
+        this.playerNameInput = playerNameInput; 
+        this.profileErrorMessage = profileErrorMessage; // <-- NOVO
+        this.currentUser = currentUser;       
+        this.currentUser2 = currentUser2;     
     }
+    // --- FIM DA ATUALIZAÇÃO ---
+    
+    public void updateBoards(Board board1, Board board2) {
+         this.board1 = board1;
+         this.board2 = board2;
+    }
+
 
     @Override
     protected void paintComponent(Graphics g) {
@@ -122,19 +140,25 @@ public class OverlayPanel extends JPanel {
                 case MAIN_MENU:
                     drawStartScreen(g2d);
                     break;
-                case PROFILE_SELECTION:
-                    drawProfileSelectionScreen(g2d);
-                    break;
-                case PLAYER2_PROFILE_SELECTION:
-                    drawPlayer2ProfileSelectionScreen(g2d);
-                    break;
                 case MODE_SELECT:
                     drawModeSelectScreen(g2d);
                     break;
-                case RANKING_SCREEN_1P:
-                    drawRanking1PScreen(g2d);
+                case PROFILE_SELECTION: 
+                    drawProfileSelectionScreen(g2d, 1); // P1
                     break;
-                case RANKING_SCREEN_2P:
+                case PROFILE_SELECTION_P2: 
+                    drawProfileSelectionScreen(g2d, 2); // P2
+                    break;
+                case PROFILE_CREATE: 
+                    drawProfileCreateScreen(g2d);
+                    break;
+                case RANKING_MODE_SELECT: 
+                    drawRankingModeSelectScreen(g2d);
+                    break;
+                case RANKING_SCREEN:
+                    drawRankingScreen(g2d);
+                    break;
+                case RANKING_SCREEN_2P: 
                     drawRanking2PScreen(g2d);
                     break;
                 case RULES_SCREEN:
@@ -173,12 +197,25 @@ public class OverlayPanel extends JPanel {
         g.setColor(Color.GRAY);
         drawCenteredString(g, text, getWidth() / 2, getHeight() - 60);
     }
+    
+    // --- NOVO HELPER ---
+    /** Desenha a mensagem de erro (se houver) na base do card */
+    private void drawErrorMessage(Graphics2D g, int card_y, int card_height) {
+        if (profileErrorMessage != null && !profileErrorMessage.isEmpty()) {
+            g.setColor(Color.RED);
+            g.setFont(new Font("Consolas", Font.BOLD, 18));
+            // Posiciona a 30px de baixo do card
+            drawCenteredString(g, profileErrorMessage, getWidth() / 2, card_y + card_height - 35);
+        }
+    }
+    // --- FIM DO NOVO HELPER ---
+
 
     private void drawStartScreen(Graphics2D g) {
         drawMenuTitle(g, "T E T R I S");
         
         int cardWidth = 350;
-        int cardHeight = 320;
+        int cardHeight = 280;
         int x = getWidth() / 2 - cardWidth / 2;
         int y = getHeight() / 2 - cardHeight / 2;
         
@@ -187,7 +224,7 @@ public class OverlayPanel extends JPanel {
         g.setFont(new Font("Consolas", Font.PLAIN, 28));
         int y_menu = y + 60;
         
-        String[] options = {"Jogar", "Ranking 1P", "Ranking 2P", "Regras", "Controles", "Sair"};
+        String[] options = {"Jogar", "Ranking", "Regras", "Controles", "Sair"}; 
         boolean cursorVisible = (System.currentTimeMillis() / 400) % 2 == 0;
         String selector = cursorVisible ? ">" : " ";
         
@@ -202,16 +239,77 @@ public class OverlayPanel extends JPanel {
             y_menu += 45;
         }
         
-        if (currentUser != null) {
-            g.setFont(new Font("Consolas", Font.PLAIN, 16));
-            g.setColor(Color.CYAN);
-            drawCenteredString(g, "Logado como: " + currentUser.getUsername(), getWidth() / 2, getHeight() - 90);
-        }
-        
         drawFooterHint(g, "(Use ↑↓ para selecionar, ENTER para confirmar)");
     }
     
-    private void drawProfileSelectionScreen(Graphics2D g) {
+    private void drawProfileSelectionScreen(Graphics2D g, int playerNum) {
+        int cardWidth = 500; 
+        int cardHeight = 450; 
+        int x = getWidth() / 2 - cardWidth / 2;
+        int y = getHeight() / 2 - cardHeight / 2;
+        
+        drawMenuCard(g, x, y, cardWidth, cardHeight);
+        
+        g.setColor(Color.CYAN);
+        g.setFont(new Font("Consolas", Font.BOLD, 36));
+        
+        String title = (playerNum == 1) ? "JOGADOR 1" : "JOGADOR 2";
+        drawCenteredString(g, title, getWidth() / 2, y + 70); 
+
+        if (playerNum == 2 && currentUser != null) {
+            g.setFont(new Font("Consolas", Font.PLAIN, 14));
+            g.setColor(Color.LIGHT_GRAY);
+            drawCenteredString(g, "P1: " + currentUser.getUsername(), getWidth() / 2, y + 95);
+        }
+
+        g.setColor(Color.WHITE);
+        g.setFont(new Font("Consolas", Font.PLAIN, 18));
+        drawCenteredString(g, "Selecione um perfil ou crie um novo:", getWidth() / 2, y + 140); 
+        
+        g.setFont(new Font("Consolas", Font.PLAIN, 24));
+        int y_list = y + 190;
+        int list_x = getWidth() / 2;
+        
+        boolean cursorVisible = (System.currentTimeMillis() / 400) % 2 == 0;
+        String selector = cursorVisible ? ">" : " ";
+
+        if (allProfiles != null) {
+            for (int i = 0; i < allProfiles.size(); i++) {
+                PlayerProfile profile = allProfiles.get(i);
+                String name = profile.getUsername();
+                
+                if (playerNum == 2 && currentUser != null && currentUser.getUserID() == profile.getUserID()) {
+                    g.setColor(Color.GRAY); 
+                    drawCenteredString(g, name, list_x, y_list);
+                } else {
+                    if (i == profileListSelection) {
+                        g.setColor(Color.YELLOW);
+                        drawCenteredString(g, selector + " " + name, list_x, y_list);
+                    } else {
+                        g.setColor(Color.WHITE);
+                        drawCenteredString(g, name, list_x, y_list);
+                    }
+                }
+                y_list += 35;
+            }
+        }
+
+        int createOptionIndex = (allProfiles != null) ? allProfiles.size() : 0;
+        if (profileListSelection == createOptionIndex) {
+            g.setColor(Color.GREEN); 
+            drawCenteredString(g, selector + " [CRIAR NOVO USUÁRIO]", list_x, y_list);
+        } else {
+            g.setColor(Color.WHITE);
+            drawCenteredString(g, "[CRIAR NOVO USUÁRIO]", list_x, y_list);
+        }
+        
+        // --- NOVO: Desenha a mensagem de erro ---
+        drawErrorMessage(g, y, cardHeight);
+        
+        drawFooterHint(g, "(Use ↑↓ para selecionar, ENTER para confirmar, ESC para voltar)");
+    }
+
+    private void drawProfileCreateScreen(Graphics2D g) {
         int cardWidth = 500; 
         int cardHeight = 300;
         int x = getWidth() / 2 - cardWidth / 2;
@@ -221,12 +319,13 @@ public class OverlayPanel extends JPanel {
         
         g.setColor(Color.CYAN);
         g.setFont(new Font("Consolas", Font.BOLD, 36));
-        drawCenteredString(g, "JOGADOR 1 - LOGIN", getWidth() / 2, y + 70);
+        
+        String title = (currentUser == null) ? "CRIAR PERFIL (P1)" : "CRIAR PERFIL (P2)";
+        drawCenteredString(g, title, getWidth() / 2, y + 70); 
 
         g.setColor(Color.WHITE);
         g.setFont(new Font("Consolas", Font.PLAIN, 18));
-        drawCenteredString(g, "Digite seu nome de usuário:", getWidth() / 2, y + 120);
-        drawCenteredString(g, "(O perfil será criado se não existir)", getWidth() / 2, y + 145);
+        drawCenteredString(g, "Digite um novo nome de usuário:", getWidth() / 2, y + 130); 
         
         g.setFont(new Font("Consolas", Font.BOLD, 28));
         g.setColor(Color.WHITE);
@@ -236,42 +335,12 @@ public class OverlayPanel extends JPanel {
         
         drawCenteredString(g, nameStr, getWidth() / 2, y + 210);
         
-        drawFooterHint(g, "(A-Z, 0-9) | ENTER para Confirmar | ESC para Voltar");
-    }
-    
-    private void drawPlayer2ProfileSelectionScreen(Graphics2D g) {
-        int cardWidth = 500;
-        int cardHeight = 330;
-        int x = getWidth() / 2 - cardWidth / 2;
-        int y = getHeight() / 2 - cardHeight / 2;
-        
-        drawMenuCard(g, x, y, cardWidth, cardHeight);
-        
-        g.setColor(Color.ORANGE);
-        g.setFont(new Font("Consolas", Font.BOLD, 36));
-        drawCenteredString(g, "JOGADOR 2 - LOGIN", getWidth() / 2, y + 70);
+        // --- NOVO: Desenha a mensagem de erro ---
+        drawErrorMessage(g, y, cardHeight);
 
-        g.setColor(Color.WHITE);
-        g.setFont(new Font("Consolas", Font.PLAIN, 18));
-        drawCenteredString(g, "Digite o nome do segundo jogador:", getWidth() / 2, y + 120);
-        drawCenteredString(g, "(Deve ser diferente do Jogador 1)", getWidth() / 2, y + 145);
-        
-        if (currentUser != null) {
-            g.setColor(Color.CYAN);
-            g.setFont(new Font("Consolas", Font.PLAIN, 16));
-            drawCenteredString(g, "Jogador 1: " + currentUser.getUsername(), getWidth() / 2, y + 175);
-        }
-        
-        g.setFont(new Font("Consolas", Font.BOLD, 28));
-        g.setColor(Color.ORANGE);
-        
-        boolean cursorVisible = (System.currentTimeMillis() / 400) % 2 == 0;
-        String nameStr = player2NameInput + (cursorVisible ? "_" : "");
-        
-        drawCenteredString(g, nameStr, getWidth() / 2, y + 235);
-        
-        drawFooterHint(g, "(A-Z, 0-9) | ENTER para Confirmar | ESC para Voltar");
+        drawFooterHint(g, "(A-Z, 0-9) | ENTER para Confirmar | ESC para Voltar à Lista");
     }
+
 
     private void drawModeSelectScreen(Graphics2D g) {
         drawMenuTitle(g, "T E T R I S");
@@ -301,94 +370,52 @@ public class OverlayPanel extends JPanel {
             y_menu += 45;
         }
         
-        if (currentUser != null) {
-            g.setFont(new Font("Consolas", Font.PLAIN, 16));
-            g.setColor(Color.CYAN);
-            drawCenteredString(g, "Jogando como: " + currentUser.getUsername(), getWidth() / 2, getHeight() - 90);
-        }
-        
-        drawFooterHint(g, "(Pressione ESC para Voltar)");
+        drawFooterHint(g, "(Pressione ESC para Voltar ao Menu)");
     }
 
-    private void drawRanking1PScreen(Graphics2D g) {
-        int cardWidth = 700; 
-        int cardHeight = 580; 
+    private void drawRankingModeSelectScreen(Graphics2D g) {
+        drawMenuTitle(g, "RANKING");
+
+        int cardWidth = 350;
+        int cardHeight = 150;
         int x = getWidth() / 2 - cardWidth / 2;
-        int y = 80;
+        int y = getHeight() / 2 - cardHeight / 2;
+        
+        drawMenuCard(g, x, y, cardWidth, cardHeight);
+        
+        g.setFont(new Font("Consolas", Font.PLAIN, 28));
+        int y_menu = y + 50;
+
+        String[] options = {"Ranking 1P (Pontuação)", "Ranking 2P (Vitórias)"};
+        boolean cursorVisible = (System.currentTimeMillis() / 400) % 2 == 0;
+        String selector = cursorVisible ? ">" : " ";
+        
+        for (int i = 0; i < options.length; i++) {
+            if (i == rankingModeSelection) {
+                g.setColor(Color.YELLOW);
+                drawCenteredString(g, selector + " " + options[i], getWidth() / 2, y_menu);
+            } else {
+                g.setColor(Color.WHITE);
+                drawCenteredString(g, options[i], getWidth() / 2, y_menu);
+            }
+            y_menu += 45;
+        }
+        
+        drawFooterHint(g, "(Pressione ESC para Voltar ao Menu)");
+    }
+
+
+    private void drawRankingScreen(Graphics2D g) {
+        int cardWidth = 650; 
+        int cardHeight = 550; 
+        int x = getWidth() / 2 - cardWidth / 2;
+        int y = 100;
         
         drawMenuCard(g, x, y, cardWidth, cardHeight);
         
         g.setColor(Color.CYAN);
         g.setFont(new Font("Consolas", Font.BOLD, 32));
-        drawCenteredString(g, "RANKING 1P - TOP SCORES", getWidth() / 2, y + 50);
-
-        g.setColor(Color.YELLOW);
-        g.setFont(new Font("Consolas", Font.BOLD, 16));
-        int y_list = y + 100;
-        int x_padding = 35;
-        
-        g.drawString("POS", x + x_padding, y_list);
-        g.drawString("NOME", x + x_padding + 50, y_list);
-        g.drawString("SCORE", x + x_padding + 200, y_list);
-        g.drawString("LVL", x + x_padding + 310, y_list);
-        g.drawString("LINHAS", x + x_padding + 370, y_list);
-        g.drawString("TETRIS", x + x_padding + 460, y_list);
-        g.drawString("DATA", x + x_padding + 550, y_list);
-        
-        g.setColor(Color.GRAY);
-        g.drawLine(x + 20, y_list + 10, x + cardWidth - 20, y_list + 10);
-        
-        y_list += 35;
-        g.setFont(new Font("Consolas", Font.PLAIN, 16));
-
-        if (topSoloScores == null || topSoloScores.isEmpty()) {
-            g.setColor(Color.WHITE);
-            drawCenteredString(g, "Nenhuma pontuação registrada.", getWidth() / 2, y + 250);
-        
-        } else {
-            int pos = 1;
-            for (SoloScoreEntry entry : topSoloScores) {
-                String posStr = String.format("%2d.", pos);
-                String scoreStr = String.format("%,d", entry.score());
-                String levelStr = String.valueOf(entry.level());
-                String linesStr = String.valueOf(entry.linesCleared());
-                String tetrisStr = String.valueOf(entry.tetrisCount());
-                String dateStr = dateFormat.format(entry.date());
-
-                if (pos == 1) g.setColor(Color.YELLOW);
-                else if (pos == 2) g.setColor(Color.LIGHT_GRAY);
-                else if (pos == 3) g.setColor(new Color(205, 127, 50));
-                else g.setColor(Color.WHITE);
-                
-                g.drawString(posStr, x + x_padding, y_list);
-                g.drawString(entry.username(), x + x_padding + 50, y_list);
-                g.drawString(scoreStr, x + x_padding + 200, y_list);
-                g.drawString(levelStr, x + x_padding + 310, y_list);
-                g.drawString(linesStr, x + x_padding + 370, y_list);
-                g.drawString(tetrisStr, x + x_padding + 460, y_list);
-                g.drawString(dateStr, x + x_padding + 550, y_list);
-                
-                y_list += 28;
-                pos++;
-                
-                if (pos > 15) break;
-            }
-        }
-
-        drawFooterHint(g, "(Pressione ENTER ou ESC para Voltar)");
-    }
-    
-    private void drawRanking2PScreen(Graphics2D g) {
-        int cardWidth = 650;
-        int cardHeight = 550;
-        int x = getWidth() / 2 - cardWidth / 2;
-        int y = 90;
-        
-        drawMenuCard(g, x, y, cardWidth, cardHeight);
-        
-        g.setColor(Color.ORANGE);
-        g.setFont(new Font("Consolas", Font.BOLD, 32));
-        drawCenteredString(g, "RANKING 2P - VITÓRIAS", getWidth() / 2, y + 50);
+        drawCenteredString(g, "RANKING 1P (MELHOR SCORE)", getWidth() / 2, y + 50);
 
         g.setColor(Color.YELLOW);
         g.setFont(new Font("Consolas", Font.BOLD, 16));
@@ -396,52 +423,105 @@ public class OverlayPanel extends JPanel {
         int x_padding = 40;
         
         g.drawString("POS", x + x_padding, y_list);
-        g.drawString("JOGADOR", x + x_padding + 50, y_list);
-        g.drawString("VITÓRIAS", x + x_padding + 240, y_list);
-        g.drawString("DERROTAS", x + x_padding + 350, y_list);
-        g.drawString("PARTIDAS", x + x_padding + 460, y_list);
-        g.drawString("% VITÓRIAS", x + x_padding + 540, y_list - 3);
+        g.drawString("NOME", x + x_padding + 50, y_list);
+        g.drawString("PONTUAÇÃO", x + x_padding + 210, y_list);
+        g.drawString("NÍVEL", x + x_padding + 330, y_list); 
+        g.drawString("LINHAS", x + x_padding + 400, y_list); 
+        g.drawString("DATA", x + x_padding + 510, y_list); 
         
         g.setColor(Color.GRAY);
         g.drawLine(x + 20, y_list + 10, x + cardWidth - 20, y_list + 10);
         
-        y_list += 35;
+        y_list += 35; 
+        g.setColor(Color.WHITE);
         g.setFont(new Font("Consolas", Font.PLAIN, 16));
 
-        if (topMultiplayerRanking == null || topMultiplayerRanking.isEmpty()) {
-            g.setColor(Color.WHITE);
-            drawCenteredString(g, "Nenhuma partida 2P registrada.", getWidth() / 2, y + 250);
+        if (topSoloScores == null || topSoloScores.isEmpty()) {
+            drawCenteredString(g, "Nenhuma pontuação registrada.", getWidth() / 2, y + 250);
         
         } else {
             int pos = 1;
-            for (RankingEntry2P entry : topMultiplayerRanking) {
+            for (SoloScoreEntry entry : topSoloScores) {
                 String posStr = String.format("%2d.", pos);
-                String winsStr = String.valueOf(entry.wins());
-                String lossesStr = String.valueOf(entry.losses());
-                String gamesStr = String.valueOf(entry.gamesPlayed());
-                String winRateStr = String.format("%.1f%%", entry.winRate());
+                String scoreStr = String.format("%,d", entry.score()); 
+                String levelStr = String.format("%02d", entry.level());     
+                String linesStr = String.format("%03d", entry.linesCleared()); 
+                String dateStr = dateFormat.format(entry.date());
 
                 if (pos == 1) g.setColor(Color.YELLOW);
                 else if (pos == 2) g.setColor(Color.LIGHT_GRAY);
-                else if (pos == 3) g.setColor(new Color(205, 127, 50));
+                else if (pos == 3) g.setColor(new Color(205, 127, 50)); // Bronze
                 else g.setColor(Color.WHITE);
                 
                 g.drawString(posStr, x + x_padding, y_list);
                 g.drawString(entry.username(), x + x_padding + 50, y_list);
-                g.drawString(winsStr, x + x_padding + 260, y_list);
-                g.drawString(lossesStr, x + x_padding + 370, y_list);
-                g.drawString(gamesStr, x + x_padding + 480, y_list);
-                g.drawString(winRateStr, x + x_padding + 550, y_list);
+                g.drawString(scoreStr, x + x_padding + 210, y_list);
+                g.drawString(levelStr, x + x_padding + 330, y_list); 
+                g.drawString(linesStr, x + x_padding + 400, y_list); 
+                g.drawString(dateStr, x + x_padding + 510, y_list); 
                 
-                y_list += 28;
+                y_list += 28; 
                 pos++;
-                
-                if (pos > 15) break;
             }
         }
 
         drawFooterHint(g, "(Pressione ENTER ou ESC para Voltar)");
     }
+    
+    private void drawRanking2PScreen(Graphics2D g) {
+        int cardWidth = 450; 
+        int cardHeight = 550; 
+        int x = getWidth() / 2 - cardWidth / 2;
+        int y = 100;
+        
+        drawMenuCard(g, x, y, cardWidth, cardHeight);
+        
+        g.setColor(Color.CYAN);
+        g.setFont(new Font("Consolas", Font.BOLD, 32));
+        drawCenteredString(g, "RANKING 2P (VITÓRIAS)", getWidth() / 2, y + 50);
+
+        g.setColor(Color.YELLOW);
+        g.setFont(new Font("Consolas", Font.BOLD, 16));
+        int y_list = y + 100;
+        int x_padding = 40;
+        g.drawString("POS", x + x_padding, y_list);
+        g.drawString("NOME", x + x_padding + 70, y_list);
+        g.drawString("VITÓRIAS", x + x_padding + 280, y_list);
+        
+        g.setColor(Color.GRAY);
+        g.drawLine(x + 20, y_list + 10, x + cardWidth - 20, y_list + 10);
+        
+        y_list += 35; 
+        g.setColor(Color.WHITE);
+        g.setFont(new Font("Consolas", Font.PLAIN, 16));
+
+        if (top2PWins == null || top2PWins.isEmpty()) {
+            drawCenteredString(g, "Nenhuma vitória registrada.", getWidth() / 2, y + 250);
+        
+        } else {
+            int pos = 1;
+            for (PlayerWinsEntry entry : top2PWins) {
+                String posStr = String.format("%2d.", pos);
+                String winsStr = String.format("%,d", entry.wins()); 
+
+                if (pos == 1) g.setColor(Color.YELLOW);
+                else if (pos == 2) g.setColor(Color.LIGHT_GRAY);
+                else if (pos == 3) g.setColor(new Color(205, 127, 50)); // Bronze
+                else g.setColor(Color.WHITE);
+                
+                g.drawString(posStr, x + x_padding, y_list);
+                g.drawString(entry.username(), x + x_padding + 70, y_list);
+                g.drawString(winsStr, x + x_padding + 280, y_list);
+                
+                y_list += 28; 
+                pos++;
+            }
+        }
+
+        drawFooterHint(g, "(Pressione ENTER ou ESC para Voltar)");
+    }
+    
+    // ... (Métodos de desenhar Pausa, Regras, Controles, GameOver, e Helpers) ...
     
     private void drawRulesScreen(Graphics2D g) {
         int cardWidth = 700; 
@@ -459,6 +539,7 @@ public class OverlayPanel extends JPanel {
         int x_col1 = x + 50;
         int x_col2 = x + 370;
 
+        // Coluna 1
         g.setColor(Color.YELLOW);
         g.setFont(new Font("Consolas", Font.BOLD, 22));
         g.drawString("PONTUAÇÃO", x_col1, y_col);
@@ -479,9 +560,13 @@ public class OverlayPanel extends JPanel {
         g.setColor(Color.WHITE);
         g.setFont(new Font("Consolas", Font.PLAIN, 16));
         y_col += 30;
-        String textNivel = "Você avança de nível a cada\n10 linhas limpas. Um nível\nmais alto aumenta a velocidade\ndo jogo e seus pontos.";
+        String textNivel = "Você avança de nível a cada\n" +
+                           "10 linhas limpas. Um nível\n" +
+                           "mais alto aumenta a velocidade\n" +
+                           "do jogo e seus pontos.";
         y_col = drawMultiLineString(g, textNivel, x_col1, y_col);
 
+        // Coluna 2
         y_col = y + 120; 
         g.setColor(Color.YELLOW);
         g.setFont(new Font("Consolas", Font.BOLD, 22));
@@ -489,7 +574,11 @@ public class OverlayPanel extends JPanel {
         g.setColor(Color.WHITE);
         g.setFont(new Font("Consolas", Font.PLAIN, 16));
         y_col += 40;
-        String textLixo = "No modo 2P, limpar linhas envia\n'Lixo' (linhas cinzas) para o \noponente. O lixo aparece na \nbase do tabuleiro, empurrando \nas peças dele para cima.";
+        String textLixo = "No modo 2P, limpar linhas envia\n" +
+                          "'Lixo' (linhas cinzas) para o \n" +
+                          "oponente. O lixo aparece na \n" +
+                          "base do tabuleiro, empurrando \n" +
+                          "as peças dele para cima.";
         y_col = drawMultiLineString(g, textLixo, x_col2, y_col);
         g.setColor(Color.LIGHT_GRAY);
         g.setFont(new Font("Consolas", Font.PLAIN, 18));
@@ -517,18 +606,21 @@ public class OverlayPanel extends JPanel {
         int x_p2 = x + 370;
         int y_col;
 
+        // Coluna 1
         g.setColor(Color.YELLOW);
         g.setFont(new Font("Consolas", Font.BOLD, 18));
         y_col = y_start;
         g.drawString("MODO 1 JOGADOR", x_p1, y_col);
         drawControls1P(g, x_p1, y_col + 30);
         
+        // Coluna 2
         g.setColor(Color.YELLOW);
         g.setFont(new Font("Consolas", Font.BOLD, 18));
         y_col = y_start;
         g.drawString("MODO 2 JOGADORES", x_p2, y_col);
         drawControls2P(g, x_p2, y_col + 30);
         
+        // Controles Globais
         g.setColor(Color.YELLOW);
         g.setFont(new Font("Consolas", Font.BOLD, 18));
         y_col = y_start + 230; 
@@ -559,6 +651,9 @@ public class OverlayPanel extends JPanel {
             g.setColor(Color.RED);
             drawCenteredString(g, "GAME OVER", getWidth() / 2, y_center); 
         } else {
+            String p1_name = (currentUser != null) ? currentUser.getUsername() : "P1";
+            String p2_name = (currentUser2 != null) ? currentUser2.getUsername() : "P2";
+
             if (board1.isGameOver() && board2.isGameOver()) {
                 g.setFont(new Font("Consolas", Font.BOLD, 36));
                 g.setColor(Color.WHITE);
@@ -566,17 +661,17 @@ public class OverlayPanel extends JPanel {
             } else if (board1.isGameOver()) {
                 g.setFont(new Font("Consolas", Font.BOLD, 28));
                 g.setColor(Color.RED);
-                drawCenteredString(g, "P1 PERDEU", p1_x_center, y_center);
+                drawCenteredString(g, p1_name + " PERDEU", p1_x_center, y_center);
                 g.setFont(new Font("Consolas", Font.BOLD, 28));
                 g.setColor(Color.GREEN);
-                drawCenteredString(g, "P2 VENCEU!", p2_x_center, y_center);
+                drawCenteredString(g, p2_name + " VENCEU!", p2_x_center, y_center);
             } else if (board2.isGameOver()) {
                 g.setFont(new Font("Consolas", Font.BOLD, 28));
                 g.setColor(Color.GREEN);
-                drawCenteredString(g, "P1 VENCEU!", p1_x_center, y_center);
+                drawCenteredString(g, p1_name + " VENCEU!", p1_x_center, y_center);
                 g.setFont(new Font("Consolas", Font.BOLD, 28));
                 g.setColor(Color.RED);
-                drawCenteredString(g, "P2 PERDEU", p2_x_center, y_center);
+                drawCenteredString(g, p2_name + " PERDEU", p2_x_center, y_center);
             }
         }
         
@@ -641,6 +736,7 @@ public class OverlayPanel extends JPanel {
         int y_col = y + 100;
         int x_col = x + 50;
 
+        // Pontuação
         g.setColor(Color.YELLOW);
         g.setFont(new Font("Consolas", Font.BOLD, 22));
         g.drawString("PONTUAÇÃO", x_col, y_col);
@@ -655,6 +751,7 @@ public class OverlayPanel extends JPanel {
         g.setColor(Color.ORANGE);
         y_col += 30; g.drawString("TETRIS (4): 1200 pts", x_col, y_col);
         
+        // Nível
         y_col += 40; 
         g.setColor(Color.YELLOW);
         g.setFont(new Font("Consolas", Font.BOLD, 22));
@@ -662,9 +759,11 @@ public class OverlayPanel extends JPanel {
         g.setColor(Color.WHITE);
         g.setFont(new Font("Consolas", Font.PLAIN, 16));
         y_col += 30;
-        String textNivel = "A cada 10 linhas limpas,\nvocê avança de nível.";
+        String textNivel = "A cada 10 linhas limpas,\n" +
+                           "você avança de nível.";
         y_col = drawMultiLineString(g, textNivel, x_col, y_col);
 
+        // Lixo
         if (currentGameMode == GameController.GameMode.TWO_PLAYER) {
             y_col += 40;
             g.setColor(Color.YELLOW);

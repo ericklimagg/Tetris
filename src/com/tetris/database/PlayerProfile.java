@@ -2,7 +2,10 @@ package com.tetris.database;
 
 /**
  * Representa o Perfil de um Jogador (a tabela PlayerProfiles).
- * ATUALIZADO: Adiciona TotalScore_1P e Losses_2P.
+ * Usamos uma classe (e não um record) pois as estatísticas
+ * são mutáveis e atualizadas durante o jogo.
+ *
+ * ATUALIZADO: Adiciona todos os campos da tabela SQL.
  */
 public class PlayerProfile {
 
@@ -10,39 +13,29 @@ public class PlayerProfile {
     private String username;
     private int gamesPlayed1P;
     private int highScore1P;
-    private long totalScore1P;
+    private long totalScore_1P; // <-- CAMPO ADICIONADO
     private int gamesPlayed2P;
     private int wins2P;
-    private int losses2P;
+    private int losses_2P;     // <-- CAMPO ADICIONADO
     
-    public PlayerProfile(int userID, String username, int gamesPlayed1P, int highScore1P, 
-                        long totalScore1P, int gamesPlayed2P, int wins2P, int losses2P) {
+    // Construtor ATUALIZADO para 8 argumentos
+    public PlayerProfile(int userID, String username, int gamesPlayed1P, int highScore1P, long totalScore_1P, int gamesPlayed2P, int wins2P, int losses_2P) {
         this.userID = userID;
         this.username = username;
         this.gamesPlayed1P = gamesPlayed1P;
         this.highScore1P = highScore1P;
-        this.totalScore1P = totalScore1P;
+        this.totalScore_1P = totalScore_1P; // <-- ADICIONADO
         this.gamesPlayed2P = gamesPlayed2P;
         this.wins2P = wins2P;
-        this.losses2P = losses2P;
+        this.losses_2P = losses_2P;     // <-- ADICIONADO
     }
 
+    // Getters para o GameController usar
     public int getUserID() { return userID; }
     public String getUsername() { return username; }
-    public int getGamesPlayed1P() { return gamesPlayed1P; }
     public int getHighScore1P() { return highScore1P; }
-    public long getTotalScore1P() { return totalScore1P; }
-    public int getGamesPlayed2P() { return gamesPlayed2P; }
     public int getWins2P() { return wins2P; }
-    public int getLosses2P() { return losses2P; }
     
-    public double getAverageScore1P() {
-        if (gamesPlayed1P == 0) return 0.0;
-        return (double) totalScore1P / gamesPlayed1P;
-    }
-    
-    public double getWinRate2P() {
-        if (gamesPlayed2P == 0) return 0.0;
-        return ((double) wins2P / gamesPlayed2P) * 100.0;
-    }
+    // (Poderíamos adicionar mais getters para a tela de estatísticas, 
+    // como getTotalScore1P() ou getLosses2P() se necessário no futuro)
 }
